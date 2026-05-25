@@ -1,10 +1,12 @@
-function App() {
+import { AppProviders } from './app/providers/AppProviders';
+import { AppRouter } from './app/router/router';
 
+function App() {
   return (
-    <>
-      react
-    </>
-  )
+    <AppProviders>
+      <AppRouter />
+    </AppProviders>
+  );
 }
 
-export default App
+export default App;
