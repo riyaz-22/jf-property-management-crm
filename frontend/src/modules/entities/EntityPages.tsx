@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Eye,
+  Image,
   Pencil,
   Plus,
   Search,
@@ -19,7 +20,9 @@ import {
   type Column,
 } from '../../components/ui/Primitives';
 import { crmService, type ListParams } from '../../services/crm';
-import { getApiErrorMessage } from '../../services/api';
+import { getApiErrorMessage, resolveAssetUrl } from '../../services/api';
+import { userService } from '../../services/users';
+import { useAuthStore } from '../../app/store/authStore';
 import type { EntityKey, Paginated } from '../../types/domain';
 import { formatCurrency, formatDate } from '../../utils/cn';
 
@@ -52,6 +55,7 @@ type EntityConfig = {
   defaultSort: string;
   statusFilter?: FieldOption[];
   activeFilter?: FieldOption[];
+  activeFilterParam?: 'isActive' | 'activeState';
   sortOptions?: FieldOption[];
   fields: FieldConfig[];
   columns: Column<EntityRow>[];
@@ -117,6 +121,19 @@ const dateValue = (row: EntityRow | undefined, key: string) =>
   row?.[key] ? String(row[key]).slice(0, 10) : '';
 
 const relationId = (row: EntityRow | undefined, key: string) => nestedValue(row ?? { id: '' }, key)?.id ?? '';
+
+const avatarFor = (row: EntityRow) => resolveAssetUrl(String(row.avatarUrl ?? ''));
+
+const UserAvatar = ({ row }: { row: EntityRow }) => {
+  const avatarUrl = avatarFor(row);
+  const initials = `${String(row.firstName ?? 'U')[0] ?? 'U'}${String(row.lastName ?? '')[0] ?? ''}`.toUpperCase();
+
+  return (
+    <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-md bg-emerald-50 text-xs font-black text-emerald-800">
+      {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : initials}
+    </span>
+  );
+};
 
 const mapBase = (values: Record<string, string>, fields: string[]) =>
   fields.reduce<Record<string, unknown>>((payload, field) => {
@@ -191,6 +208,16 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
     createLabel: 'Add tenant',
     defaultSort: 'createdAt',
     statusFilter: toOptions(['ACTIVE', 'APPLICANT', 'NOTICE_GIVEN', 'ARCHIVED']),
+    activeFilter: [{ label: 'Active tenants', value: 'active' }, { label: 'Inactive tenants', value: 'inactive' }],
+    activeFilterParam: 'activeState',
+    sortOptions: [
+      { label: 'Default sort', value: '' },
+      { label: 'Created date', value: 'createdAt' },
+      { label: 'First name', value: 'firstName' },
+      { label: 'Last name', value: 'lastName' },
+      { label: 'Move-in date', value: 'moveInDate' },
+      { label: 'Status', value: 'status' },
+    ],
     fields: [
       { name: 'firstName', label: 'First name', required: true },
       { name: 'lastName', label: 'Last name', required: true },
@@ -200,6 +227,7 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
       { name: 'currentPropertyId', label: 'Current property', type: 'select', optionSource: 'properties', getOptionLabel: (row) => String(row.title) },
     ],
     columns: [
+      { header: 'Photo', cell: (row) => <UserAvatar row={row} /> },
       { header: 'Name', cell: (row) => <span className="font-black">{nameOf(row)}</span> },
       { header: 'Email', cell: (row) => String(row.email) },
       { header: 'Phone', cell: (row) => String(row.phone ?? '-') },
@@ -380,6 +408,7 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
     defaultSort: 'createdAt',
     statusFilter: toOptions(enumOptions.roles),
     activeFilter: [{ label: 'Active users', value: 'true' }, { label: 'Disabled users', value: 'false' }],
+    activeFilterParam: 'isActive',
     sortOptions: [
       { label: 'Default sort', value: '' },
       { label: 'Role', value: 'role' },
@@ -479,9 +508,9 @@ const EntityForm = ({
               field.options ??
               (field.optionSource
                 ? (options[field.optionSource] ?? []).map((row) => ({
-                    label: field.getOptionLabel?.(row) ?? String(row.id),
-                    value: row.id,
-                  }))
+                  label: field.getOptionLabel?.(row) ?? String(row.id),
+                  value: row.id,
+                }))
                 : []);
 
             return (
@@ -522,6 +551,75 @@ const EntityForm = ({
   );
 };
 
+const AvatarUploadPanel = ({
+  record,
+  isSaving,
+  onUpload,
+  onRemove,
+  onCancel,
+}: {
+  record: EntityRow;
+  isSaving: boolean;
+  onUpload: (file: File) => void;
+  onRemove: () => void;
+  onCancel: () => void;
+}) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState(avatarFor(record));
+  const [error, setError] = useState('');
+
+  const chooseFile = (selected?: File) => {
+    setError('');
+    if (!selected) {
+      return;
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(selected.type)) {
+      setError('Use a JPG, PNG, or WEBP image.');
+      return;
+    }
+
+    if (selected.size > 2 * 1024 * 1024) {
+      setError('Profile image must be 2 MB or smaller.');
+      return;
+    }
+
+    setFile(selected);
+    setPreview(URL.createObjectURL(selected));
+  };
+
+  return (
+    <div className="grid gap-5">
+      <div className="flex items-center gap-4">
+        <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-md bg-emerald-50 text-lg font-black text-emerald-800">
+          {preview ? <img src={preview} alt="Profile preview" className="h-full w-full object-cover" /> : nameOf(record).slice(0, 2).toUpperCase()}
+        </div>
+        <div>
+          <p className="text-sm font-black text-slate-950">{nameOf(record)}</p>
+          <p className="text-sm text-slate-500">{String(record.email ?? '')}</p>
+        </div>
+      </div>
+      <label className="grid gap-2 text-sm font-semibold text-slate-700">
+        Upload image
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm text-slate-950"
+          onChange={(event) => chooseFile(event.target.files?.[0])}
+        />
+      </label>
+      {error ? <p className="rounded-md bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
+      <div className="flex justify-end gap-3">
+        <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+        <Button variant="secondary" disabled={isSaving || !record.avatarUrl} onClick={onRemove}>Remove image</Button>
+        <Button disabled={isSaving || !file} onClick={() => file && onUpload(file)}>
+          {isSaving ? 'Saving...' : 'Save image'}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export const EntityPage = ({ entity }: { entity: EntityKey }) => {
   const queryClient = useQueryClient();
   const config = entityConfigs[entity];
@@ -530,9 +628,12 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
     | { type: 'edit'; record: EntityRow }
     | { type: 'view'; record: EntityRow }
     | { type: 'delete'; record: EntityRow }
+    | { type: 'avatar'; record: EntityRow }
     | null
   >(null);
   const [toast, setToast] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+  const updateCurrentUser = useAuthStore((state) => state.updateUser);
+  const currentUser = useAuthStore((state) => state.user);
   const [searchDraft, setSearchDraft] = useState('');
   const [params, setParams] = useState<ListParams>({
     page: 1,
@@ -541,7 +642,10 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
     sortOrder: 'desc',
   });
   const primaryFilterValue = entity === 'users' ? String(params.role ?? '') : String(params.status ?? '');
-  const activeFilterValue = String(params.isActive ?? '');
+  const activeFilterParam = config.activeFilterParam;
+  const activeFilterValue = activeFilterParam ? String(params[activeFilterParam] ?? '') : '';
+  const tenantPropertyValue = String(params.propertyId ?? '');
+  const tenantLeaseStatusValue = String(params.leaseStatus ?? '');
   const sortOptions = config.sortOptions ?? defaultSortOptions;
 
   const setPrimaryFilter = (value: string) => {
@@ -554,7 +658,19 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
   };
 
   const setActiveFilter = (value: string) => {
-    setParams((current) => ({ ...current, page: 1, isActive: value || undefined }));
+    if (!activeFilterParam) {
+      return;
+    }
+
+    setParams((current) => ({ ...current, page: 1, [activeFilterParam]: value || undefined }));
+  };
+
+  const setTenantPropertyFilter = (value: string) => {
+    setParams((current) => ({ ...current, page: 1, propertyId: value || undefined }));
+  };
+
+  const setTenantLeaseStatusFilter = (value: string) => {
+    setParams((current) => ({ ...current, page: 1, leaseStatus: value || undefined }));
   };
 
   const listQuery = useQuery({
@@ -624,6 +740,32 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
     onError: (error) => setToast({ tone: 'error', message: getApiErrorMessage(error) }),
   });
 
+  const uploadAvatar = useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => userService.uploadAvatar(id, file),
+    onSuccess: async (user) => {
+      setModal(null);
+      setToast({ tone: 'success', message: 'Profile photo updated.' });
+      if (currentUser?.id === user.id) {
+        updateCurrentUser(user);
+      }
+      await invalidate();
+    },
+    onError: (error) => setToast({ tone: 'error', message: getApiErrorMessage(error) }),
+  });
+
+  const removeAvatar = useMutation({
+    mutationFn: (id: string) => userService.removeAvatar(id),
+    onSuccess: async (user) => {
+      setModal(null);
+      setToast({ tone: 'success', message: 'Profile photo removed.' });
+      if (currentUser?.id === user.id) {
+        updateCurrentUser(user);
+      }
+      await invalidate();
+    },
+    onError: (error) => setToast({ tone: 'error', message: getApiErrorMessage(error) }),
+  });
+
   const data = listQuery.data as Paginated<EntityRow> | undefined;
   const rows = data?.data ?? [];
   const meta = data?.meta;
@@ -643,6 +785,11 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
           <button type="button" aria-label="Edit" onClick={() => setModal({ type: 'edit', record: row })} className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 hover:bg-slate-50">
             <Pencil size={16} />
           </button>
+          {entity === 'users' ? (
+            <button type="button" aria-label="Profile photo" onClick={() => setModal({ type: 'avatar', record: row })} className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 hover:bg-slate-50">
+              <Image size={16} />
+            </button>
+          ) : null}
           <button type="button" aria-label="Delete" onClick={() => setModal({ type: 'delete', record: row })} className="grid h-9 w-9 place-items-center rounded-md border border-red-200 text-red-600 hover:bg-red-50">
             <Trash2 size={16} />
           </button>
@@ -675,7 +822,12 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
         </div>
       ) : null}
 
-      <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_220px_180px_180px]">
+      <div className={`grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm ${config.activeFilter
+        ? entity === 'tenants'
+          ? 'lg:grid-cols-[1fr_150px_150px_180px_160px_150px]'
+          : 'lg:grid-cols-[1fr_180px_150px_160px_150px]'
+        : 'lg:grid-cols-[1fr_220px_180px_180px]'
+        }`}>
         <label className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
@@ -691,7 +843,7 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
           />
         </label>
         <select
-          className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
+          className="h-11 rounded-md border border-slate-200 bg-white px-3 pr-7 text-sm font-semibold outline-none appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%236b7280%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_10px_center]"
           value={primaryFilterValue}
           onChange={(event) => setPrimaryFilter(event.target.value)}
         >
@@ -700,20 +852,44 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
-        {entity === 'users' ? (
+        {config.activeFilter ? (
           <select
-            className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
+            className="h-11 rounded-md border border-slate-200 bg-white px-3 pr-7 text-sm font-semibold outline-none appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%236b7280%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_10px_center]"
             value={activeFilterValue}
             onChange={(event) => setActiveFilter(event.target.value)}
           >
-            <option value="">All account states</option>
+            <option value="">{entity === 'users' ? 'All account states' : 'All tenant states'}</option>
             {config.activeFilter?.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
         ) : null}
+        {entity === 'tenants' ? (
+          <>
+            <select
+              className="h-11 rounded-md border border-slate-200 bg-white px-3 pr-7 text-sm font-semibold outline-none appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%236b7280%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_10px_center]"
+              value={tenantPropertyValue}
+              onChange={(event) => setTenantPropertyFilter(event.target.value)}
+            >
+              <option value="">All properties</option>
+              {(options.properties ?? []).map((property) => (
+                <option key={property.id} value={property.id}>{String(property.title)}</option>
+              ))}
+            </select>
+            <select
+              className="h-11 rounded-md border border-slate-200 bg-white px-3 pr-7 text-sm font-semibold outline-none appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%236b7280%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_10px_center]"
+              value={tenantLeaseStatusValue}
+              onChange={(event) => setTenantLeaseStatusFilter(event.target.value)}
+            >
+              <option value="">All lease states</option>
+              {toOptions(enumOptions.leaseStatus).map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </>
+        ) : null}
         <select
-          className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
+          className="h-11 rounded-md border border-slate-200 bg-white px-3 pr-7 text-sm font-semibold outline-none appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%236b7280%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_10px_center]"
           value={String(params.sortBy)}
           onChange={(event) => setParams((current) => ({ ...current, sortBy: event.target.value || config.defaultSort }))}
         >
@@ -722,7 +898,7 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
           ))}
         </select>
         <select
-          className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
+          className="h-11 rounded-md border border-slate-200 bg-white px-3 pr-7 text-sm font-semibold outline-none appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%236b7280%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_10px_center]"
           value={String(params.sortOrder)}
           onChange={(event) => setParams((current) => ({ ...current, sortOrder: event.target.value as 'asc' | 'desc' }))}
         >
@@ -796,6 +972,18 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
           <div className="max-h-[60vh] overflow-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">
             <pre>{JSON.stringify(modal.record, null, 2)}</pre>
           </div>
+        ) : null}
+      </Modal>
+
+      <Modal title="Profile photo" open={modal?.type === 'avatar'} onClose={() => setModal(null)}>
+        {modal?.type === 'avatar' ? (
+          <AvatarUploadPanel
+            record={modal.record}
+            isSaving={uploadAvatar.isPending || removeAvatar.isPending}
+            onUpload={(file) => uploadAvatar.mutate({ id: modal.record.id, file })}
+            onRemove={() => removeAvatar.mutate(modal.record.id)}
+            onCancel={() => setModal(null)}
+          />
         ) : null}
       </Modal>
 

@@ -2,6 +2,9 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import express from 'express';
+import { existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { getRequiredEnv, validateEnvironment } from './config/env.validation';
@@ -12,6 +15,11 @@ async function bootstrap() {
   validateEnvironment();
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api/v1');
+  const uploadsRoot = join(process.cwd(), 'uploads');
+  if (!existsSync(uploadsRoot)) {
+    mkdirSync(uploadsRoot, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsRoot));
   const frontendUrl = getRequiredEnv('FRONTEND_URL', ['CORS_ORIGIN']);
   app.enableCors({
     origin: frontendUrl.split(','),

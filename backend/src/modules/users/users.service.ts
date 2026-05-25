@@ -1,6 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import {
   getPaginatedResponse,
   getPagination,
@@ -126,6 +128,28 @@ export class UsersService {
     });
   }
 
+  async updateAvatar(id: string, avatarUrl: string) {
+    const user = await this.findOne(id);
+    this.removeAvatarFile(user.avatarUrl);
+
+    return this.prisma.user.update({
+      where: { id },
+      data: { avatarUrl },
+      select: userSelect,
+    });
+  }
+
+  async removeAvatar(id: string) {
+    const user = await this.findOne(id);
+    this.removeAvatarFile(user.avatarUrl);
+
+    return this.prisma.user.update({
+      where: { id },
+      data: { avatarUrl: null },
+      select: userSelect,
+    });
+  }
+
   async remove(id: string) {
     await this.findOne(id);
     return this.prisma.user.update({
@@ -136,5 +160,21 @@ export class UsersService {
       },
       select: userSelect,
     });
+  }
+
+  private removeAvatarFile(avatarUrl?: string | null) {
+    if (!avatarUrl?.startsWith('/uploads/avatars/')) {
+      return;
+    }
+
+    const filename = avatarUrl.split('/').at(-1);
+    if (!filename) {
+      return;
+    }
+
+    const avatarPath = join(process.cwd(), 'uploads', 'avatars', filename);
+    if (existsSync(avatarPath)) {
+      unlinkSync(avatarPath);
+    }
   }
 }

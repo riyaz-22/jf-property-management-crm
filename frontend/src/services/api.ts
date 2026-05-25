@@ -2,7 +2,20 @@ import axios, { type AxiosResponse } from 'axios';
 import { useAuthStore } from '../app/store/authStore';
 import type { ApiEnvelope, AuthSession } from '../types/domain';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
+export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
+const ASSET_URL = API_URL.replace(/\/api\/v1\/?$/, '');
+
+export const resolveAssetUrl = (url?: string | null) => {
+  if (!url) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  return `${ASSET_URL}${url.startsWith('/') ? url : `/${url}`}`;
+};
 
 export const apiClient = axios.create({
   baseURL: API_URL,

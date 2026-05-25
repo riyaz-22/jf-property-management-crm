@@ -18,11 +18,14 @@ import {
   UserRound,
   Users,
 } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../services/auth';
 import { useAuthStore } from '../app/store/authStore';
 import { cn } from '../utils/cn';
 import { Button } from '../components/ui/Primitives';
+import { resolveAssetUrl } from '../services/api';
+import { userService } from '../services/users';
 
 const navigation = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -47,7 +50,9 @@ const getActiveNavPath = (pathname: string) =>
 export const AppShell = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, refreshToken, logout } = useAuthStore();
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [avatarError, setAvatarError] = useState('');
+  const { user, refreshToken, logout, updateUser } = useAuthStore();
   const activeNavPath = getActiveNavPath(location.pathname);
 
   const handleLogout = () => {
@@ -55,6 +60,34 @@ export const AppShell = () => {
     logout();
     navigate('/login');
   };
+
+  const handleAvatarFile = async (file?: File) => {
+    setAvatarError('');
+
+    if (!file) {
+      return;
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setAvatarError('Use a JPG, PNG, or WEBP image.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError('Profile image must be 2 MB or smaller.');
+      return;
+    }
+
+    try {
+      const updated = await userService.uploadMyAvatar(file);
+      updateUser(updated);
+    } catch {
+      setAvatarError('Profile image could not be uploaded.');
+    }
+  };
+
+  const initials = user ? `${user.firstName[0]}${user.lastName[0]}` : 'JF';
+  const avatarUrl = resolveAssetUrl(user?.avatarUrl);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -131,8 +164,34 @@ export const AppShell = () => {
               Quick Action
               <ChevronDown size={15} />
             </Button>
-            <div className="hidden h-11 min-w-11 items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-black text-emerald-800 sm:flex">
-              {user ? `${user.firstName[0]}${user.lastName[0]}` : 'JF'}
+            <div className="relative hidden sm:block">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  void handleAvatarFile(event.target.files?.[0]);
+                  event.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                title="Upload profile photo"
+                onClick={() => avatarInputRef.current?.click()}
+                className="flex h-11 min-w-11 items-center justify-center overflow-hidden rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-black text-emerald-800"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Profile" className="h-11 w-11 object-cover" />
+                ) : (
+                  initials
+                )}
+              </button>
+              {avatarError ? (
+                <span className="absolute right-0 top-12 w-52 rounded-md bg-red-50 p-2 text-xs font-semibold text-red-700 shadow-sm">
+                  {avatarError}
+                </span>
+              ) : null}
             </div>
           </div>
         </header>

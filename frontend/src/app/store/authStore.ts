@@ -9,6 +9,7 @@ type AuthState = {
   refreshToken: string | null;
   isAuthenticated: boolean;
   setSession: (session: AuthSession) => void;
+  updateUser: (user: User) => void;
   logout: () => void;
 };
 
@@ -36,6 +37,13 @@ export const useAuthStore = create<AuthState>((set) => ({
       refreshToken: session.refreshToken,
       isAuthenticated: true,
     });
+  },
+  updateUser: (user) => {
+    const current = getStoredSession();
+    if (current) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, user }));
+    }
+    set({ user });
   },
   logout: () => {
     localStorage.removeItem(STORAGE_KEY);

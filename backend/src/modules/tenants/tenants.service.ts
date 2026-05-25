@@ -20,6 +20,8 @@ const tenantInclude = {
   },
 };
 
+const tenantSortFields = new Set(['createdAt', 'firstName', 'lastName', 'status']);
+
 @Injectable()
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -29,7 +31,10 @@ export class TenantsService {
     const where: Prisma.TenantWhereInput = {
       deletedAt: null,
       ...(query.status ? { status: query.status } : {}),
+      ...(query.activeState === 'active' ? { status: 'ACTIVE' } : {}),
+      ...(query.activeState === 'inactive' ? { status: { not: 'ACTIVE' } } : {}),
       ...(query.propertyId ? { currentPropertyId: query.propertyId } : {}),
+      ...(query.leaseStatus ? { leases: { some: { status: query.leaseStatus, deletedAt: null } } } : {}),
       ...(query.search
         ? {
             OR: [
@@ -48,7 +53,7 @@ export class TenantsService {
         include: tenantInclude,
         skip,
         take,
-        orderBy: { [query.sortBy]: query.sortOrder },
+        orderBy: { [tenantSortFields.has(query.sortBy) ? query.sortBy : 'createdAt']: query.sortOrder },
       }),
       this.prisma.tenant.count({ where }),
     ]);

@@ -1,6 +1,7 @@
 import { PartialType } from '@nestjs/mapped-types';
+import { LeaseStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsDate, IsEmail, IsOptional, IsString } from 'class-validator';
+import { IsDate, IsEmail, IsEnum, IsIn, IsOptional, IsString } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
 export class TenantQueryDto extends PaginationQueryDto {
@@ -11,6 +12,18 @@ export class TenantQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   propertyId?: string;
+
+  @IsOptional()
+  @IsEnum(LeaseStatus)
+  leaseStatus?: LeaseStatus;
+
+  @IsOptional()
+  @IsIn(['active', 'inactive'])
+  activeState?: 'active' | 'inactive';
+
+  @IsOptional()
+  @IsIn(['createdAt', 'firstName', 'lastName', 'status', 'moveInDate'])
+  sortBy = 'createdAt';
 }
 
 export class CreateTenantDto {
