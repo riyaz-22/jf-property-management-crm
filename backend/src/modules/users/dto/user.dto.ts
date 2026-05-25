@@ -4,16 +4,35 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsOptional,
   IsString,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
 export class UserQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(Role)
   role?: Role;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) {
+      return true;
+    }
+    if (value === 'false' || value === false) {
+      return false;
+    }
+    return value;
+  })
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsIn(['email', 'firstName', 'lastName', 'role', 'isActive', 'createdAt', 'updatedAt'])
+  sortBy = 'createdAt';
 }
 
 export class CreateUserDto {

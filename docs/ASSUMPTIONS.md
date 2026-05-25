@@ -1,71 +1,73 @@
-# Assumptions and Technical Considerations
+# Assumptions and Constraints
 
-## Assumptions
+This document describes the current implementation assumptions, not planned architecture.
 
-- The repository is the submission source code repository.
-- PostgreSQL is the only database target.
-- JWT authentication is implemented even though the prompt allows it to be optional.
-- The screenshots represent the most important UI workflow: contact directory, contact detail, sell intent workspace, and valuation scheduling.
-- The existing frontend architecture was mostly an empty scaffold with intended folders, so the implementation reused those folder names and filled the missing modules.
-- Email delivery for password reset is not wired to an SMTP provider; the backend creates a reset token and returns it for local evaluation.
-- File upload stores an attachment URL placeholder. Production storage would use S3, Azure Blob, local storage with static serving, or another configured asset store.
-- The operational CRM modules require the backend and PostgreSQL to be running; API failure states are shown in the UI instead of silently substituting mock records.
+## Runtime Assumptions
 
-## Technical Considerations
+- PostgreSQL runs locally or is available through `DATABASE_URL`.
+- Prisma migrations are applied before backend startup.
+- Backend runs on `PORT=3000` by default.
+- Frontend runs on `http://localhost:5173`.
+- `FRONTEND_URL` controls CORS origin. `CORS_ORIGIN` is retained for compatibility.
+- `JWT_SECRET` and `JWT_REFRESH_SECRET` are required in backend environment.
+- The application is currently single-tenant.
 
-### Architecture
+## Authentication Assumptions
 
-- Backend uses one Nest module per major CRM domain.
-- Common backend concerns live in `src/common`: decorators, guards, filters, interceptors, pagination.
-- Prisma is global through `PrismaModule`.
-- Frontend uses feature modules under `src/modules`.
-- Reusable UI primitives live in `src/components/ui`.
-- API communication is centralized in `src/services`.
+- Public account registration is intentionally removed.
+- Users are created by admin/User Management or system seed/bootstrap logic.
+- Passwords are hashed with bcrypt.
+- Access tokens are short-lived JWT bearer tokens.
+- Refresh tokens are opaque random strings stored hashed in PostgreSQL.
+- Frontend persists session state in localStorage through Zustand.
+- Forgot/reset password flow is implemented, but email delivery is not connected to SMTP.
 
-### Authentication
+## RBAC Assumptions
 
-- Access token: JWT bearer token.
-- Refresh token: opaque random token, hashed before database storage.
-- Refresh rotation: old refresh token is revoked and linked to a replacement.
-- RBAC: roles are stored on `User.role` and checked with `@Roles`.
-- Frontend session persistence: Zustand + localStorage.
-- Axios interceptors attach bearer tokens and attempt refresh once on `401`.
+- Roles are a Prisma enum on `User.role`.
+- Current roles: `SUPER_ADMIN`, `ADMIN`, `MANAGER`, `STAFF`, `AGENT`, `ACCOUNTANT`, `MAINTENANCE`, `VIEWER`.
+- `MANAGER` is the current manager-level CRM role.
+- User Management is admin-only.
+- More granular permissions are not modeled yet.
 
-### Validation and Error Handling
+## Database Assumptions
 
-- Backend DTOs use `class-validator` and global `ValidationPipe`.
-- Backend strips unknown fields with `whitelist`.
-- A global exception filter normalizes API errors.
-- A global response interceptor wraps successful responses.
-- Frontend forms use React Hook Form and Zod.
+- PostgreSQL is the source of truth for CRM modules.
+- Business records use soft deletes via `deletedAt`.
+- Auth token records use revocation/expiry rather than soft delete.
+- Startup validation checks connectivity, migration state, required roles, and required internal users.
+- Seed logic uses upsert and does not wipe existing data.
+- Demo CRM data is opt-in with `SEED_DEMO_DATA=true`.
 
-### Database Normalisation
+## Frontend Assumptions
 
-- Property, tenant, lease, payment, maintenance, notification, activity, and user concerns are separate models.
-- Join relationships use foreign keys rather than duplicated denormalized data.
-- Business entities support soft delete through `deletedAt`.
-- Token tables use expiry/revocation fields instead of soft delete.
+- Auth, dashboard, and entity modules call the NestJS API through Axios.
+- Contact directory, contact detail, sell-intent workspace, valuation scheduler, and AI insight panels are frontend demo experiences backed by local contact constants.
+- The generic `EntityPage` is used for properties, tenants, leases, payments, maintenance, notifications, and users with entity-specific configs.
+- TanStack Query handles list caching, refetching, and invalidation after mutations.
 
-### Performance
+## AI / Co-Pilot Assumptions
 
-- List APIs use pagination.
-- Prisma queries use filters and indexes for common lookup paths.
-- Frontend server state uses TanStack Query caching.
-- Vite build currently produces a large single bundle; route-level lazy loading would be a production optimization.
+- AI Co-Pilot insights are currently rule/static UI content in `ContactPages.tsx`.
+- Recommendations are rendered as insight cards and action prompts; they are not generated by an external LLM at runtime.
+- AI chat/message history is not persisted in the current database schema.
+- A production LLM integration would add a provider service, prompt templates, audit logging, and persisted AI interaction records.
 
-### UI/UX
+## CRUD Assumptions
 
-- The app shell, sidebar, contact directory, drawer, detail page, sell intent workspace, and scheduler are built to closely follow the provided screenshots.
-- The interface is responsive with mobile bottom navigation.
-- UI controls use familiar icons from `lucide-react`.
+- Operational modules persist in PostgreSQL through Prisma.
+- Create/edit/delete modals use React Hook Form and call generic CRM service methods.
+- Delete operations are soft deletes for business entities and user deactivation for users.
+- List endpoints support pagination, search, filtering, and sorting where DTOs allow it.
 
-### Production Gaps / Next Steps
+## Known Issues / Constraints
 
-- Add full e2e test coverage with a test PostgreSQL database.
-- Add route-level code splitting.
-- Add real email provider for reset password.
-- Add production-grade upload storage.
-- Add audit logs for all mutations.
-- Add more granular permissions beyond role-level checks.
-- Add OpenAPI examples for every DTO.
-- Add CI pipeline for lint, build, tests, and migration validation.
+- No cloud deployment configuration is included.
+- No SMTP provider is configured for password reset or invite emails.
+- Maintenance attachment endpoint stores an attachment URL only; file storage is not implemented.
+- AI recommendations are currently local/static rather than LLM-generated.
+- Contact intelligence pages use local demo contact data, not PostgreSQL contact tables.
+- No `Unit` table exists; properties are represented directly by `Property`.
+- No `ActivityLog` table exists; dashboard activity uses the `Activity` model.
+- Vite build emits a bundle-size warning because route-level code splitting is not yet implemented.
+- Automated test coverage is limited compared with a production CRM.

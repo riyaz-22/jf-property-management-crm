@@ -78,6 +78,14 @@ const extractServerMessage = (payload: unknown) => {
   return null;
 };
 
+const toUserMessage = (message: string) => {
+  if (/property .+ should not exist/i.test(message)) {
+    return 'This filter is not supported for the current module. Clear filters and try again.';
+  }
+
+  return message;
+};
+
 export const getApiErrorMessage = (error: unknown) => {
   if (!axios.isAxiosError(error)) {
     return 'Unexpected client error. Try again.';
@@ -90,16 +98,16 @@ export const getApiErrorMessage = (error: unknown) => {
   const serverMessage = extractServerMessage(error.response.data);
 
   if (error.response.status === 401) {
-    return serverMessage ?? 'Your session expired. Sign in again.';
+    return serverMessage ? toUserMessage(serverMessage) : 'Your session expired. Sign in again.';
   }
 
   if (error.response.status === 403) {
-    return serverMessage ?? 'Your role is not allowed to access this module.';
+    return serverMessage ? toUserMessage(serverMessage) : 'Your role is not allowed to access this module.';
   }
 
   if (error.response.status >= 500) {
-    return serverMessage ?? 'Backend server error. Check the API logs and retry.';
+    return serverMessage ? toUserMessage(serverMessage) : 'Backend server error. Check the API logs and retry.';
   }
 
-  return serverMessage ?? 'Request failed. Check the submitted data and retry.';
+  return serverMessage ? toUserMessage(serverMessage) : 'Request failed. Check the submitted data and retry.';
 };

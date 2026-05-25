@@ -3,7 +3,6 @@ export type Role =
   | 'ADMIN'
   | 'MANAGER'
   | 'STAFF'
-  | 'PROPERTY_MANAGER'
   | 'AGENT'
   | 'ACCOUNTANT'
   | 'MAINTENANCE'

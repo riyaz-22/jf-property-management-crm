@@ -11,7 +11,6 @@ enum Role {
   ADMIN
   MANAGER
   STAFF
-  PROPERTY_MANAGER
   AGENT
   ACCOUNTANT
   MAINTENANCE
@@ -101,7 +100,7 @@ model User {
   lastName        String               @db.VarChar(100)
   phone           String?              @db.VarChar(40)
   avatarUrl       String?
-  role            Role                 @default(PROPERTY_MANAGER)
+  role            Role                 @default(STAFF)
   isActive        Boolean              @default(true)
   lastLoginAt     DateTime?
   deletedAt       DateTime?

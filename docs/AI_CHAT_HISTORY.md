@@ -1,122 +1,95 @@
-# AI Chat History Summary
+# AI Chat History and Co-Pilot Documentation
 
-This document summarizes the AI-assisted implementation history for the assignment.
+This document records how AI-assisted work shaped the project and how AI-related UI exists in the current implementation.
 
-## Initial User Request
+## Implementation History
 
-The user requested that the existing repository be extended directly, without creating a new project or overwriting architecture. The requested CRM included:
+The project was expanded inside the existing repository rather than rebuilt. Work focused on:
 
-- React/Vite/TypeScript frontend.
-- Tailwind CSS UI matching supplied screenshots.
-- React Router, Axios, Zustand, React Hook Form, Zod, TanStack Query, Framer Motion.
-- NestJS backend.
-- PostgreSQL with Prisma.
-- JWT access/refresh authentication.
-- RBAC authorization.
-- Swagger documentation.
-- Modules for dashboard, properties, tenants, leases, payments, maintenance, notifications, and users.
+- NestJS modules for auth, users, dashboard, properties, tenants, leases, payments, maintenance, notifications.
+- PostgreSQL persistence through Prisma.
+- JWT auth, refresh-token rotation, RBAC guards, admin-only user management.
+- React/Vite frontend with protected routes, app shell, dashboard, contact intelligence pages, and reusable CRUD entity pages.
+- Removal of public registration and hardening of system seed/startup validation.
+- Role cleanup so `MANAGER` is the current manager-level CRM role.
+- User Management query fixes so role filtering/sorting sends valid user parameters only.
 
-## Codebase Analysis
+## Current AI Co-Pilot Features
 
-The repository contained:
+The implemented AI feature is a frontend AI Co-Pilot presentation layer in `frontend/src/modules/contacts/ContactPages.tsx`.
 
-- `frontend/src` folders for app, components, constants, hooks, layouts, modules, services, styles, types, and utils.
-- Minimal frontend files: `App.tsx`, `main.tsx`, and empty `index.css`.
-- NestJS starter backend files.
-- No implemented domain modules.
+Visible AI-related UI:
+- `AI Co-Pilot Insights` panel on contact detail and sell-intent workspace.
+- `Curator AI insights` section in the contact drawer.
+- Insight cards such as probability, recommended action, valuation urgency, and conversation guidance.
+- Floating `AI assistant` action button in the app shell.
 
-Decision:
+## AI Insight Rendering Flow
 
-- Preserve the existing folder scaffold.
-- Add missing files/modules into the current structure.
-- Avoid renaming or removing existing architecture.
+Current flow:
 
-## Backend Implementation
+1. Contact pages load local contact records from `frontend/src/constants/demoData.ts`.
+2. `ContactDirectoryPage` displays selectable contacts.
+3. `ContactDrawer`, `ContactDetailPage`, and `SellIntentWorkspacePage` render insight panels.
+4. Insight content is static/rule-style UI text embedded in React components.
+5. No backend AI endpoint is called at runtime.
 
-Added:
+This means AI recommendations currently appear as deterministic UI content rather than live LLM-generated output.
 
-- Prisma schema with normalized relational models.
-- Prisma 7 config using `prisma.config.ts`.
-- Initial SQL migration.
-- Seed script with login-ready admin/manager users, properties, tenants, leases, payment history, tickets, notifications, and activity.
-- Prisma service/module.
-- JWT auth module.
-- Refresh token rotation.
-- Password reset token flow.
-- RBAC decorators and guards.
-- Common pagination DTO/utilities.
-- Global exception filter.
-- Global response interceptor.
-- Swagger setup.
-- Modules and REST controllers/services for:
-  - auth
-  - users
-  - dashboard
-  - properties
-  - tenants
-  - leases
-  - payments
-  - maintenance
-  - notifications
+## AI Recommendations
 
-## Frontend Implementation
+Recommendations appear as:
+- Compact insight cards in dark panels.
+- Suggested next actions in the sell-intent workspace.
+- Contextual labels around urgency, probability, and communication strategy.
 
-Added:
+Examples of represented recommendation types:
+- Follow-up timing.
+- Valuation priority.
+- Seller intent signal.
+- Suggested CRM action.
 
-- App providers with TanStack Query.
-- React Router route tree.
-- Protected app shell.
-- Zustand auth store with localStorage persistence.
-- Central Axios client with bearer token injection and refresh retry.
-- Auth screens: login, forgot password, reset password.
-- Dashboard page with KPI cards and analytics.
-- Contact directory matching the screenshots.
-- Contact insight drawer.
-- Contact detail page.
-- Sell intent workspace.
-- Valuation scheduler side panel.
-- Generic entity pages for properties, tenants, leases, payments, maintenance, notifications, and users.
-- Reusable primitives: buttons, cards, badges, modal, inputs, table, stat card, skeleton.
-- Tailwind base styling.
-- API-backed CRUD pages with loading, error, create, edit, delete, search, filter, and pagination behavior.
+## Data Source
 
-## Verification
+AI/contact intelligence data is currently mocked/local:
 
-The following checks passed:
+- Contacts come from `demoData.ts`.
+- Insight card text is component-defined.
+- No AI recommendations are stored in PostgreSQL.
+- No prompt, model output, vector store, or external LLM provider is currently wired.
 
-```bash
-cd frontend
-npm run build
+Operational CRM modules such as properties, users, leases, payments, and maintenance are database-driven. Contact intelligence/AI panels are frontend demo modules.
 
-cd ../backend
-npm run build
-npm test -- app.controller.spec.ts
-npm run prisma:generate
-```
+## History Persistence Strategy
 
-The frontend was confirmed reachable at:
+Current implementation:
+- AI chat history is not persisted.
+- No `AiMessage`, `AiConversation`, or `AiInsight` database model exists.
+- No backend AI conversation API exists.
 
-```text
-http://localhost:5173
-```
+Recommended future persistence model:
+- `AiConversation`: user, module context, entity id, title, timestamps.
+- `AiMessage`: conversation id, role, content, metadata, token usage.
+- `AiInsight`: entity context, recommendation type, confidence, source data snapshot.
+- Audit fields for model/provider, prompt version, and generated-at timestamp.
 
-## Follow-Up User Request
+## Future AI Extensibility Assumptions
 
-The user listed expected deliverables:
+A production LLM integration would add:
 
-- Source code repository.
-- README setup instructions.
-- Database schema design.
-- API documentation.
-- Screenshots/video walkthrough optional.
-- Assumptions and technical considerations document.
-- AI chat history for the assignment.
-- Evaluation criteria around code quality, UI accuracy, reusable components, API architecture, normalization, state management, error handling, validations, performance, folder structure, and naming.
+- Backend AI module with authenticated endpoints.
+- Provider abstraction for OpenAI or another LLM API.
+- Prompt templates per CRM workflow.
+- Server-side retrieval of relevant CRM records.
+- Persisted conversation and recommendation history.
+- Guardrails for role-based access to entity data.
+- Rate limiting and audit logs.
+- UI state for streaming messages, retries, and feedback.
 
-Response:
+## Current Limitations
 
-- Added this document.
-- Added database documentation.
-- Added API documentation.
-- Added assumptions and technical considerations.
-- Replaced default starter READMEs with assignment-specific README files.
+- AI content is not generated live.
+- AI history is not stored.
+- Floating assistant button is a UI affordance, not a connected chat surface.
+- No external AI API key/config is required for the current app.
+- Contact AI screens are realistic demo workflows, not full backend-backed intelligence modules.

@@ -138,13 +138,13 @@ async function main() {
 
   const manager = await prisma.user.upsert({
     where: { email: 'manager@jfcrm.com' },
-    update: { passwordHash, role: Role.PROPERTY_MANAGER, isActive: true },
+    update: { passwordHash, role: Role.MANAGER, isActive: true },
     create: {
       email: 'manager@jfcrm.com',
       passwordHash,
       firstName: 'Alexander',
       lastName: 'Thorne',
-      role: Role.PROPERTY_MANAGER,
+      role: Role.MANAGER,
       phone: '+44 7700 900 456',
     },
   });

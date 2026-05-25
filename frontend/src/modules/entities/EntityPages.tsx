@@ -51,6 +51,8 @@ type EntityConfig = {
   createLabel: string;
   defaultSort: string;
   statusFilter?: FieldOption[];
+  activeFilter?: FieldOption[];
+  sortOptions?: FieldOption[];
   fields: FieldConfig[];
   columns: Column<EntityRow>[];
   mapPayload: (values: Record<string, string>, mode: 'create' | 'edit') => Record<string, unknown>;
@@ -66,11 +68,17 @@ const enumOptions = {
   maintenancePriority: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
   maintenanceStatus: ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_TENANT', 'COMPLETED', 'CANCELLED'],
   notificationType: ['INFO', 'SUCCESS', 'WARNING', 'ERROR', 'TASK'],
-  roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'PROPERTY_MANAGER', 'AGENT', 'ACCOUNTANT', 'MAINTENANCE', 'VIEWER'],
+  roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'AGENT', 'ACCOUNTANT', 'MAINTENANCE', 'VIEWER'],
 };
 
 const toOptions = (values: readonly string[]) =>
   values.map((value) => ({ label: value.replaceAll('_', ' '), value }));
+
+const defaultSortOptions = [
+  { label: 'Default sort', value: '' },
+  { label: 'Created date', value: 'createdAt' },
+  { label: 'Updated date', value: 'updatedAt' },
+];
 
 const toNumber = (value?: string) => (value ? Number(value) : undefined);
 const emptyToUndefined = (value?: string) => (value?.trim() ? value.trim() : undefined);
@@ -371,6 +379,16 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
     createLabel: 'Add user',
     defaultSort: 'createdAt',
     statusFilter: toOptions(enumOptions.roles),
+    activeFilter: [{ label: 'Active users', value: 'true' }, { label: 'Disabled users', value: 'false' }],
+    sortOptions: [
+      { label: 'Default sort', value: '' },
+      { label: 'Role', value: 'role' },
+      { label: 'Email', value: 'email' },
+      { label: 'First name', value: 'firstName' },
+      { label: 'Last name', value: 'lastName' },
+      { label: 'Created date', value: 'createdAt' },
+      { label: 'Updated date', value: 'updatedAt' },
+    ],
     fields: [
       { name: 'firstName', label: 'First name', required: true },
       { name: 'lastName', label: 'Last name', required: true },
@@ -522,6 +540,22 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
     sortBy: config.defaultSort,
     sortOrder: 'desc',
   });
+  const primaryFilterValue = entity === 'users' ? String(params.role ?? '') : String(params.status ?? '');
+  const activeFilterValue = String(params.isActive ?? '');
+  const sortOptions = config.sortOptions ?? defaultSortOptions;
+
+  const setPrimaryFilter = (value: string) => {
+    setParams((current) => {
+      const { status: _status, role: _role, ...rest } = current;
+      return entity === 'users'
+        ? { ...rest, page: 1, role: value || undefined }
+        : { ...rest, page: 1, status: value || undefined };
+    });
+  };
+
+  const setActiveFilter = (value: string) => {
+    setParams((current) => ({ ...current, page: 1, isActive: value || undefined }));
+  };
 
   const listQuery = useQuery({
     queryKey: [entity, params],
@@ -658,22 +692,34 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
         </label>
         <select
           className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
-          value={String(params.status ?? '')}
-          onChange={(event) => setParams((current) => ({ ...current, page: 1, status: event.target.value || undefined, role: entity === 'users' ? event.target.value || undefined : undefined }))}
+          value={primaryFilterValue}
+          onChange={(event) => setPrimaryFilter(event.target.value)}
         >
           <option value="">{entity === 'users' ? 'All roles' : 'All statuses'}</option>
           {config.statusFilter?.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
+        {entity === 'users' ? (
+          <select
+            className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
+            value={activeFilterValue}
+            onChange={(event) => setActiveFilter(event.target.value)}
+          >
+            <option value="">All account states</option>
+            {config.activeFilter?.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        ) : null}
         <select
           className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
           value={String(params.sortBy)}
-          onChange={(event) => setParams((current) => ({ ...current, sortBy: event.target.value }))}
+          onChange={(event) => setParams((current) => ({ ...current, sortBy: event.target.value || config.defaultSort }))}
         >
-          <option value={config.defaultSort}>Default sort</option>
-          <option value="createdAt">Created date</option>
-          <option value="updatedAt">Updated date</option>
+          {sortOptions.map((option) => (
+            <option key={option.label} value={option.value || config.defaultSort}>{option.label}</option>
+          ))}
         </select>
         <select
           className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"

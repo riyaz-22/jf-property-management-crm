@@ -19,7 +19,6 @@ export class NotificationsService {
     Role.SUPER_ADMIN,
     Role.ADMIN,
     Role.MANAGER,
-    Role.PROPERTY_MANAGER,
   ];
 
   async findAll(currentUserId: string, role: Role, query: NotificationQueryDto) {

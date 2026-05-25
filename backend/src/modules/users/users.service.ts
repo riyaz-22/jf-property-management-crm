@@ -22,6 +22,16 @@ const userSelect = {
   updatedAt: true,
 };
 
+const userSortFields = new Set([
+  'email',
+  'firstName',
+  'lastName',
+  'role',
+  'isActive',
+  'createdAt',
+  'updatedAt',
+]);
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -31,6 +41,7 @@ export class UsersService {
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
       ...(query.role ? { role: query.role } : {}),
+      ...(typeof query.isActive === 'boolean' ? { isActive: query.isActive } : {}),
       ...(query.search
         ? {
             OR: [
@@ -48,7 +59,7 @@ export class UsersService {
         select: userSelect,
         skip,
         take,
-        orderBy: { [query.sortBy]: query.sortOrder },
+        orderBy: { [userSortFields.has(query.sortBy) ? query.sortBy : 'createdAt']: query.sortOrder },
       }),
       this.prisma.user.count({ where }),
     ]);

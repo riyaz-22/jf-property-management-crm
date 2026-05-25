@@ -1,176 +1,28 @@
 # API Documentation
 
-Interactive Swagger docs:
-
-```text
-http://localhost:3000/docs
-```
-
-Base API URL:
+Base URL:
 
 ```text
 http://localhost:3000/api/v1
 ```
 
-All application APIs are protected by JWT unless marked public.
-
-## Auth
-
-Public endpoints:
+Swagger:
 
 ```text
-POST /auth/login
-POST /auth/refresh
-POST /auth/logout
-POST /auth/forgot-password
-POST /auth/reset-password
+http://localhost:3000/docs
 ```
 
-Auth behavior:
-
-- Passwords are hashed with bcrypt.
-- Access tokens are JWTs.
-- Refresh tokens are opaque random tokens stored hashed in PostgreSQL.
-- Refresh token rotation revokes the old token and stores the replacement.
-- Logout revokes the supplied refresh token.
-- Password reset revokes active refresh tokens for that user.
-- Public account registration is disabled. Admins create or invite users through User Management.
-
-## Users
-
-```text
-GET    /users/me
-GET    /users
-GET    /users/:id
-POST   /users
-PATCH  /users/:id
-DELETE /users/:id
-```
-
-Admin-only endpoints use RBAC.
-
-## Dashboard
-
-```text
-GET /dashboard/summary
-```
-
-Returns KPI cards, analytics data, and recent activity.
-
-## Properties
-
-```text
-GET    /properties
-GET    /properties/:id
-POST   /properties
-PATCH  /properties/:id
-DELETE /properties/:id
-```
-
-Supports pagination, search, sorting, and filters for status/type/city.
-
-## Tenants
-
-```text
-GET    /tenants
-GET    /tenants/:id
-POST   /tenants
-PATCH  /tenants/:id
-PATCH  /tenants/:id/assign
-DELETE /tenants/:id
-```
-
-Assignment maps a tenant to a property.
-
-## Leases
-
-```text
-GET    /leases
-GET    /leases/expiring
-GET    /leases/:id
-POST   /leases
-PATCH  /leases/:id
-PATCH  /leases/:id/renew
-DELETE /leases/:id
-```
-
-Tracks active leases, expiring leases, and renewal workflows.
-
-## Payments
-
-```text
-GET    /payments
-GET    /payments/due-reminders
-GET    /payments/:id
-POST   /payments
-PATCH  /payments/:id
-PATCH  /payments/:id/mark-paid
-DELETE /payments/:id
-```
-
-Tracks payment status, method, due date, paid date, and reminders.
-
-## Maintenance
-
-```text
-GET    /maintenance
-GET    /maintenance/:id
-POST   /maintenance
-PATCH  /maintenance/:id
-PATCH  /maintenance/:id/assign
-PATCH  /maintenance/:id/status
-POST   /maintenance/:id/attachments
-DELETE /maintenance/:id
-```
-
-Supports ticket assignment, status workflow, priorities, and file upload endpoint.
-
-## Notifications
-
-```text
-GET    /notifications
-GET    /notifications/unread-count
-POST   /notifications
-PATCH  /notifications/:id/read
-PATCH  /notifications/read-all
-DELETE /notifications/:id
-```
-
-Notifications are scoped to the authenticated user for read/delete actions.
-
-## Pagination Contract
-
-List endpoints accept:
-
-```text
-page
-limit
-search
-sortBy
-sortOrder=asc|desc
-```
-
-Response shape:
+All APIs return a response envelope:
 
 ```json
 {
   "success": true,
-  "data": {
-    "data": [],
-    "meta": {
-      "total": 0,
-      "page": 1,
-      "limit": 10,
-      "totalPages": 0
-    }
-  },
+  "data": {},
   "timestamp": "2026-05-25T00:00:00.000Z"
 }
 ```
 
-## Error Contract
-
-Errors return:
+Errors use:
 
 ```json
 {
@@ -183,3 +35,224 @@ Errors return:
   }
 }
 ```
+
+## Authentication
+
+Use JWT bearer auth for protected routes:
+
+```http
+Authorization: Bearer <accessToken>
+```
+
+Public registration is not implemented. Users must be created by admin/user-management flow or startup/seed upsert.
+
+### `POST /auth/login`
+
+Public. Body:
+
+```json
+{
+  "email": "admin@jfcrm.com",
+  "password": "Password123!"
+}
+```
+
+Returns `user`, `accessToken`, `refreshToken`, and `refreshTokenExpiresAt`.
+
+### `POST /auth/refresh`
+
+Public. Body:
+
+```json
+{
+  "refreshToken": "opaque-token"
+}
+```
+
+Rotates the refresh token. The old token is revoked in PostgreSQL.
+
+### `POST /auth/logout`
+
+Public endpoint that revokes the supplied refresh token when present.
+
+```json
+{
+  "refreshToken": "opaque-token"
+}
+```
+
+### `POST /auth/forgot-password`
+
+Public. Body:
+
+```json
+{
+  "email": "admin@jfcrm.com"
+}
+```
+
+Creates a password reset token for active users. Email delivery is not configured; local response may include the reset token.
+
+### `POST /auth/reset-password`
+
+Public. Body:
+
+```json
+{
+  "token": "reset-token",
+  "password": "NewPassword123!"
+}
+```
+
+Hashes the new password and revokes active refresh tokens for that user.
+
+## Pagination, Search, Sorting
+
+List endpoints support shared pagination params unless noted:
+
+```text
+page
+limit
+search
+sortBy
+sortOrder=asc|desc
+```
+
+Paginated data shape:
+
+```json
+{
+  "data": [],
+  "meta": {
+    "total": 0,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 0
+  }
+}
+```
+
+## RBAC Rules
+
+- `SUPER_ADMIN`, `ADMIN`: full user management and delete permissions on protected admin endpoints.
+- `MANAGER`: property create/update and notification create/update.
+- Other roles can access authenticated read/list endpoints unless a controller method has `@Roles`.
+
+## Users
+
+Routes require JWT. Admin-only routes require `SUPER_ADMIN` or `ADMIN`.
+
+| Method | Route | Auth | Query/Body |
+| --- | --- | --- | --- |
+| GET | `/users/me` | Any authenticated user | none |
+| GET | `/users` | Admin | `page`, `limit`, `search`, `role`, `isActive`, `sortBy`, `sortOrder` |
+| GET | `/users/:id` | Admin | none |
+| POST | `/users` | Admin | create user body |
+| PATCH | `/users/:id` | Admin | partial user body |
+| DELETE | `/users/:id` | Admin | soft deactivates user |
+
+Create body:
+
+```json
+{
+  "email": "agent@example.com",
+  "password": "Password123!",
+  "firstName": "Avery",
+  "lastName": "Agent",
+  "phone": "+44 7700 900 000",
+  "role": "AGENT"
+}
+```
+
+Valid user sort fields: `email`, `firstName`, `lastName`, `role`, `isActive`, `createdAt`, `updatedAt`.
+
+## Dashboard
+
+| Method | Route | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/dashboard/summary` | JWT | Returns KPI counts, revenue trend, maintenance status breakdown, recent activity |
+
+Metrics are calculated from live PostgreSQL rows.
+
+## Properties
+
+| Method | Route | Auth | Query/Body |
+| --- | --- | --- | --- |
+| GET | `/properties` | JWT | `status`, `type`, `city`, pagination/search/sort |
+| GET | `/properties/:id` | JWT | none |
+| POST | `/properties` | `SUPER_ADMIN`, `ADMIN`, `MANAGER` | create property |
+| PATCH | `/properties/:id` | `SUPER_ADMIN`, `ADMIN`, `MANAGER` | partial property |
+| DELETE | `/properties/:id` | `SUPER_ADMIN`, `ADMIN` | soft delete |
+
+Create fields include `reference`, `title`, `type`, `status`, address fields, bedrooms, bathrooms, rent/deposit, optional asking price, owner details, and optional `managerId`.
+
+## Tenants
+
+| Method | Route | Auth | Query/Body |
+| --- | --- | --- | --- |
+| GET | `/tenants` | JWT | `status`, `propertyId`, pagination/search/sort |
+| GET | `/tenants/:id` | JWT | none |
+| POST | `/tenants` | JWT | create tenant |
+| PATCH | `/tenants/:id` | JWT | partial tenant |
+| PATCH | `/tenants/:id/assign` | JWT | `{ "propertyId": "..." }` |
+| DELETE | `/tenants/:id` | JWT | soft delete |
+
+## Leases
+
+| Method | Route | Auth | Query/Body |
+| --- | --- | --- | --- |
+| GET | `/leases` | JWT | `status`, `propertyId`, `tenantId`, pagination/search/sort |
+| GET | `/leases/expiring` | JWT | leases nearing expiry |
+| GET | `/leases/:id` | JWT | none |
+| POST | `/leases` | JWT | create lease |
+| PATCH | `/leases/:id` | JWT | partial lease |
+| PATCH | `/leases/:id/renew` | JWT | `{ "endDate": "...", "rentAmount": 1500 }` |
+| DELETE | `/leases/:id` | JWT | soft delete |
+
+## Payments
+
+| Method | Route | Auth | Query/Body |
+| --- | --- | --- | --- |
+| GET | `/payments` | JWT | `status`, `propertyId`, `tenantId`, pagination/search/sort |
+| GET | `/payments/due-reminders` | JWT | pending/overdue reminders |
+| GET | `/payments/:id` | JWT | none |
+| POST | `/payments` | JWT | create payment |
+| PATCH | `/payments/:id` | JWT | partial payment |
+| PATCH | `/payments/:id/mark-paid` | JWT | optional `method`, optional `paidAt` |
+| DELETE | `/payments/:id` | JWT | soft delete |
+
+## Maintenance
+
+| Method | Route | Auth | Query/Body |
+| --- | --- | --- | --- |
+| GET | `/maintenance` | JWT | `status`, `priority`, `propertyId`, `assigneeId`, pagination/search/sort |
+| GET | `/maintenance/:id` | JWT | none |
+| POST | `/maintenance` | JWT | create ticket |
+| PATCH | `/maintenance/:id` | JWT | partial ticket |
+| PATCH | `/maintenance/:id/assign` | JWT | `{ "assigneeId": "..." }` |
+| PATCH | `/maintenance/:id/status` | JWT | `{ "status": "IN_PROGRESS" }` |
+| POST | `/maintenance/:id/attachments` | JWT | `{ "attachmentUrl": "..." }` |
+| DELETE | `/maintenance/:id` | JWT | soft delete |
+
+## Notifications
+
+| Method | Route | Auth | Query/Body |
+| --- | --- | --- | --- |
+| GET | `/notifications` | JWT | `unread=true`, `userId`, pagination/search/sort |
+| GET | `/notifications/unread-count` | JWT | none |
+| POST | `/notifications` | `SUPER_ADMIN`, `ADMIN`, `MANAGER` | create notification |
+| PATCH | `/notifications/:id` | `SUPER_ADMIN`, `ADMIN`, `MANAGER` | update notification |
+| PATCH | `/notifications/:id/read` | JWT | marks own notification read |
+| PATCH | `/notifications/read-all` | JWT | marks current user's notifications read |
+| DELETE | `/notifications/:id` | JWT | scoped delete; elevated roles can delete any |
+
+## Error Handling
+
+- `400`: DTO validation or malformed input.
+- `401`: invalid credentials, expired JWT, invalid/expired/revoked refresh token.
+- `403`: inactive account, missing role, insufficient RBAC permissions.
+- `404`: record not found.
+- `409`: duplicate unique fields such as email/reference.
+- `500`: unexpected backend or database error.
+
+Frontend maps API errors into readable messages and retries eligible list queries. A `401` triggers one refresh-token attempt before logout.
