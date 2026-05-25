@@ -27,6 +27,16 @@ const ticketInclude = {
   },
 };
 
+const maintenanceSortFields = new Set([
+  'createdAt',
+  'updatedAt',
+  'title',
+  'priority',
+  'status',
+  'dueDate',
+  'cost',
+]);
+
 @Injectable()
 export class MaintenanceService {
   constructor(private readonly prisma: PrismaService) {}
@@ -56,7 +66,7 @@ export class MaintenanceService {
         include: ticketInclude,
         skip,
         take,
-        orderBy: { [query.sortBy]: query.sortOrder },
+        orderBy: { [maintenanceSortFields.has(query.sortBy) ? query.sortBy : 'createdAt']: query.sortOrder },
       }),
       this.prisma.maintenanceTicket.count({ where }),
     ]);

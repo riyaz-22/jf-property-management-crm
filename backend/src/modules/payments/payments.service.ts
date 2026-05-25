@@ -18,6 +18,16 @@ const paymentInclude = {
   lease: true,
 };
 
+const paymentSortFields = new Set([
+  'createdAt',
+  'updatedAt',
+  'reference',
+  'amount',
+  'dueDate',
+  'paidAt',
+  'status',
+]);
+
 @Injectable()
 export class PaymentsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -47,7 +57,7 @@ export class PaymentsService {
         include: paymentInclude,
         skip,
         take,
-        orderBy: { [query.sortBy]: query.sortOrder },
+        orderBy: { [paymentSortFields.has(query.sortBy) ? query.sortBy : 'dueDate']: query.sortOrder },
       }),
       this.prisma.payment.count({ where }),
     ]);

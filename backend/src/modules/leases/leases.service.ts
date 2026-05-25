@@ -21,6 +21,15 @@ const leaseInclude = {
   },
 };
 
+const leaseSortFields = new Set([
+  'createdAt',
+  'updatedAt',
+  'startDate',
+  'endDate',
+  'rentAmount',
+  'status',
+]);
+
 @Injectable()
 export class LeasesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -49,7 +58,7 @@ export class LeasesService {
         include: leaseInclude,
         skip,
         take,
-        orderBy: { [query.sortBy]: query.sortOrder },
+        orderBy: { [leaseSortFields.has(query.sortBy) ? query.sortBy : 'endDate']: query.sortOrder },
       }),
       this.prisma.lease.count({ where }),
     ]);

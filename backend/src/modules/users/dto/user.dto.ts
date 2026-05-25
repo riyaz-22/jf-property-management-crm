@@ -4,7 +4,6 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
-  IsIn,
   IsOptional,
   IsString,
   MinLength,
@@ -31,7 +30,7 @@ export class UserQueryDto extends PaginationQueryDto {
   isActive?: boolean;
 
   @IsOptional()
-  @IsIn(['email', 'firstName', 'lastName', 'role', 'isActive', 'createdAt', 'updatedAt'])
+  @IsString()
   sortBy = 'createdAt';
 }
 

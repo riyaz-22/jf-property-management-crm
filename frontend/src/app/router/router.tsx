@@ -20,7 +20,7 @@ const ProtectedRoute = () => {
   return isAuthenticated ? <AppShell /> : <Navigate to="/login" replace />;
 };
 
-const entity = (key: EntityKey) => <EntityPage entity={key} />;
+const entity = (key: EntityKey) => <EntityPage key={key} entity={key} />;
 
 const router = createBrowserRouter([
   {

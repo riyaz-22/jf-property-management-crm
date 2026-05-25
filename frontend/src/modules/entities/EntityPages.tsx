@@ -8,7 +8,7 @@ import {
   SlidersHorizontal,
   Trash2,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   Badge,
@@ -206,7 +206,7 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
     eyebrow: 'Resident records',
     description: 'Tenant records are persisted in PostgreSQL and can be assigned to active properties.',
     createLabel: 'Add tenant',
-    defaultSort: 'createdAt',
+    defaultSort: 'moveInDate',
     statusFilter: toOptions(['ACTIVE', 'APPLICANT', 'NOTICE_GIVEN', 'ARCHIVED']),
     activeFilter: [{ label: 'Active tenants', value: 'active' }, { label: 'Inactive tenants', value: 'inactive' }],
     activeFilterParam: 'activeState',
@@ -641,6 +641,17 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
     sortBy: config.defaultSort,
     sortOrder: 'desc',
   });
+
+  useEffect(() => {
+    setSearchDraft('');
+    setParams({
+      page: 1,
+      limit: 10,
+      sortBy: config.defaultSort,
+      sortOrder: 'desc',
+    });
+    setModal(null);
+  }, [entity, config.defaultSort]);
   const primaryFilterValue = entity === 'users' ? String(params.role ?? '') : String(params.status ?? '');
   const activeFilterParam = config.activeFilterParam;
   const activeFilterValue = activeFilterParam ? String(params[activeFilterParam] ?? '') : '';

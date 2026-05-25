@@ -29,6 +29,19 @@ const propertyInclude = {
   },
 };
 
+const propertySortFields = new Set([
+  'createdAt',
+  'updatedAt',
+  'reference',
+  'title',
+  'city',
+  'postcode',
+  'status',
+  'type',
+  'rentAmount',
+  'askingPrice',
+]);
+
 @Injectable()
 export class PropertiesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -59,7 +72,7 @@ export class PropertiesService {
         include: propertyInclude,
         skip,
         take,
-        orderBy: { [query.sortBy]: query.sortOrder },
+        orderBy: { [propertySortFields.has(query.sortBy) ? query.sortBy : 'createdAt']: query.sortOrder },
       }),
       this.prisma.property.count({ where }),
     ]);
