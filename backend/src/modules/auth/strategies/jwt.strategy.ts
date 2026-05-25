@@ -4,6 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Role } from '@prisma/client';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { getRequiredEnv } from '../../../config/env.validation';
 
 type JwtPayload = {
   sub: string;
@@ -20,7 +21,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret',
+      secretOrKey:
+        config.get<string>('JWT_SECRET') ??
+        config.get<string>('JWT_ACCESS_SECRET') ??
+        getRequiredEnv('JWT_SECRET', ['JWT_ACCESS_SECRET']),
     });
   }
 
@@ -41,7 +45,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!user) {
-      throw new UnauthorizedException('User account is unavailable');
+      throw new UnauthorizedException('Token is valid, but the user account is inactive or unavailable');
     }
 
     return user;

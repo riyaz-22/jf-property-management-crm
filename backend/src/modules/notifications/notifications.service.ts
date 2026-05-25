@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import {
   getPaginatedResponse,
   getPagination,
@@ -8,16 +8,25 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   CreateNotificationDto,
   NotificationQueryDto,
+  UpdateNotificationDto,
 } from './dto/notification.dto';
 
 @Injectable()
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(userId: string, query: NotificationQueryDto) {
+  private readonly elevatedRoles: Role[] = [
+    Role.SUPER_ADMIN,
+    Role.ADMIN,
+    Role.MANAGER,
+    Role.PROPERTY_MANAGER,
+  ];
+
+  async findAll(currentUserId: string, role: Role, query: NotificationQueryDto) {
     const { page, limit, skip, take } = getPagination(query);
+    const canViewAll = this.elevatedRoles.includes(role);
     const where: Prisma.NotificationWhereInput = {
-      userId,
+      ...(canViewAll ? (query.userId ? { userId: query.userId } : {}) : { userId: currentUserId }),
       deletedAt: null,
       ...(query.unread === 'true' ? { readAt: null } : {}),
     };
@@ -49,6 +58,21 @@ export class NotificationsService {
     return this.prisma.notification.create({ data: dto });
   }
 
+  async update(id: string, dto: UpdateNotificationDto) {
+    const notification = await this.prisma.notification.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    return this.prisma.notification.update({
+      where: { id },
+      data: dto,
+    });
+  }
+
   async markRead(id: string, userId: string) {
     const notification = await this.prisma.notification.findFirst({
       where: { id, userId, deletedAt: null },
@@ -71,9 +95,10 @@ export class NotificationsService {
     });
   }
 
-  async remove(id: string, userId: string) {
+  async remove(id: string, userId: string, role: Role) {
+    const canRemoveAny = this.elevatedRoles.includes(role);
     const notification = await this.prisma.notification.findFirst({
-      where: { id, userId, deletedAt: null },
+      where: { id, ...(canRemoveAny ? {} : { userId }), deletedAt: null },
     });
 
     if (!notification) {

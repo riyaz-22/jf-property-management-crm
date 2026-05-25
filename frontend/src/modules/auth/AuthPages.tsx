@@ -50,6 +50,10 @@ export const LoginPage = () => {
       navigate('/');
     },
   });
+  const errorMessage =
+    login.error instanceof Error
+      ? login.error.message
+      : 'Unable to sign in. Check your credentials and try again.';
 
   return (
     <AuthLayout>
@@ -81,9 +85,16 @@ export const LoginPage = () => {
           <Button type="submit" disabled={login.isPending} icon={<KeyRound size={18} />}>
             {login.isPending ? 'Signing in...' : 'Sign in securely'}
           </Button>
-          <Link className="text-sm font-semibold text-emerald-700 hover:text-emerald-800" to="/forgot-password">
-            Forgot password?
-          </Link>
+          {login.isError ? (
+            <p className="rounded-md bg-red-50 p-3 text-sm font-semibold text-red-700">
+              {errorMessage}
+            </p>
+          ) : null}
+          <div className="flex items-center justify-between gap-4 text-sm font-semibold">
+            <Link className="text-emerald-700 hover:text-emerald-800" to="/forgot-password">
+              Forgot password?
+            </Link>
+          </div>
         </form>
       </Card>
     </AuthLayout>

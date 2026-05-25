@@ -18,7 +18,7 @@ import {
   UserRound,
   Users,
 } from 'lucide-react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../services/auth';
 import { useAuthStore } from '../app/store/authStore';
 import { cn } from '../utils/cn';
@@ -36,9 +36,19 @@ const navigation = [
   { label: 'Users', path: '/users', icon: ShieldCheck },
 ];
 
+const isRouteMatch = (pathname: string, path: string) =>
+  path === '/' ? pathname === '/' : pathname === path || pathname.startsWith(`${path}/`);
+
+const getActiveNavPath = (pathname: string) =>
+  navigation
+    .filter((item) => isRouteMatch(pathname, item.path))
+    .sort((a, b) => b.path.length - a.path.length)[0]?.path;
+
 export const AppShell = () => {
+  const location = useLocation();
   const navigate = useNavigate();
   const { user, refreshToken, logout } = useAuthStore();
+  const activeNavPath = getActiveNavPath(location.pathname);
 
   const handleLogout = () => {
     void authService.logout(refreshToken);
@@ -59,19 +69,17 @@ export const AppShell = () => {
         </button>
         <nav className="mt-10 flex flex-1 flex-col gap-3">
           {navigation.map(({ label, path, icon: Icon }) => (
-            <NavLink
+            <Link
               key={path}
               to={path}
               title={label}
-              className={({ isActive }) =>
-                cn(
-                  'relative grid h-11 w-11 place-items-center rounded-lg transition hover:bg-white/10 hover:text-white',
-                  isActive && 'bg-white/10 text-emerald-300 before:absolute before:-left-3 before:h-7 before:w-1 before:rounded-r before:bg-emerald-400',
-                )
-              }
+              className={cn(
+                'relative grid h-11 w-11 place-items-center rounded-lg transition hover:bg-white/10 hover:text-white',
+                activeNavPath === path && 'bg-white/10 text-emerald-300 before:absolute before:-left-3 before:h-7 before:w-1 before:rounded-r before:bg-emerald-400',
+              )}
             >
               <Icon size={21} />
-            </NavLink>
+            </Link>
           ))}
         </nav>
         <div className="grid gap-3">
@@ -147,16 +155,17 @@ export const AppShell = () => {
 
       <div className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white md:hidden">
         {navigation.slice(0, 5).map(({ label, path, icon: Icon }) => (
-          <NavLink
+          <Link
             key={path}
             to={path}
-            className={({ isActive }) =>
-              cn('grid place-items-center gap-1 py-3 text-xs font-bold text-slate-500', isActive && 'text-emerald-600')
-            }
+            className={cn(
+              'grid place-items-center gap-1 py-3 text-xs font-bold text-slate-500',
+              activeNavPath === path && 'text-emerald-600',
+            )}
           >
             <Icon size={20} />
             {label}
-          </NavLink>
+          </Link>
         ))}
       </div>
     </div>

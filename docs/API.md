@@ -19,7 +19,6 @@ All application APIs are protected by JWT unless marked public.
 Public endpoints:
 
 ```text
-POST /auth/register
 POST /auth/login
 POST /auth/refresh
 POST /auth/logout
@@ -35,6 +34,7 @@ Auth behavior:
 - Refresh token rotation revokes the old token and stores the replacement.
 - Logout revokes the supplied refresh token.
 - Password reset revokes active refresh tokens for that user.
+- Public account registration is disabled. Admins create or invite users through User Management.
 
 ## Users
 

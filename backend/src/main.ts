@@ -1,16 +1,20 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { getRequiredEnv, validateEnvironment } from './config/env.validation';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 
 async function bootstrap() {
+  validateEnvironment();
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api/v1');
+  const frontendUrl = getRequiredEnv('FRONTEND_URL', ['CORS_ORIGIN']);
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') ?? ['http://localhost:5173'],
+    origin: frontendUrl.split(','),
     credentials: true,
   });
   app.use(cookieParser());
@@ -34,6 +38,6 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(Number(getRequiredEnv('PORT')));
 }
 bootstrap();

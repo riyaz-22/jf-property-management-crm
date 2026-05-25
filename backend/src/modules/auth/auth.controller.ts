@@ -6,7 +6,6 @@ import {
   ForgotPasswordDto,
   LoginDto,
   RefreshTokenDto,
-  RegisterDto,
   ResetPasswordDto,
 } from './dto/auth.dto';
 
@@ -15,11 +14,6 @@ import {
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-
-  @Post('register')
-  register(@Body() dto: RegisterDto, @Ip() ip: string) {
-    return this.authService.register(dto, ip);
-  }
 
   @Post('login')
   login(@Body() dto: LoginDto, @Ip() ip: string) {

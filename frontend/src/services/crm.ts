@@ -1,64 +1,36 @@
-import {
-  dashboardSummary,
-  leases,
-  maintenance,
-  notifications,
-  payments,
-  properties,
-  tenants,
-  users,
-} from '../constants/demoData';
 import type {
   DashboardSummary,
   EntityKey,
-  LeaseRecord,
-  MaintenanceRecord,
-  NotificationRecord,
   Paginated,
-  PaymentRecord,
-  PropertyRecord,
-  TenantRecord,
-  User,
 } from '../types/domain';
-import { apiClient, requestWithFallback } from './api';
+import { apiClient, unwrap } from './api';
 
-const page = <T>(data: T[]): Paginated<T> => ({
-  data,
-  meta: {
-    total: data.length,
-    page: 1,
-    limit: 10,
-    totalPages: 1,
-  },
-});
-
-export const entityFallbacks = {
-  properties: page<PropertyRecord>(properties),
-  tenants: page<TenantRecord>(tenants),
-  leases: page<LeaseRecord>(leases),
-  payments: page<PaymentRecord>(payments),
-  maintenance: page<MaintenanceRecord>(maintenance),
-  notifications: page<NotificationRecord>(notifications),
-  users: page<User>(users),
+export type ListParams = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  [key: string]: string | number | undefined;
 };
 
 export const crmService = {
-  dashboard() {
-    return requestWithFallback<DashboardSummary>(
-      apiClient.get('/dashboard/summary'),
-      dashboardSummary,
-    );
+  async dashboard() {
+    return unwrap<DashboardSummary>(await apiClient.get('/dashboard/summary'));
   },
-  list<T>(entity: EntityKey) {
-    return requestWithFallback<Paginated<T>>(
-      apiClient.get(`/${entity}`),
-      entityFallbacks[entity] as Paginated<T>,
-    );
+  async list<T>(entity: EntityKey, params?: ListParams) {
+    return unwrap<Paginated<T>>(await apiClient.get(`/${entity}`, { params }));
   },
-  create<TPayload, TResult>(entity: EntityKey, payload: TPayload) {
-    return requestWithFallback<TResult>(
-      apiClient.post(`/${entity}`, payload),
-      payload as unknown as TResult,
-    );
+  async detail<T>(entity: EntityKey, id: string) {
+    return unwrap<T>(await apiClient.get(`/${entity}/${id}`));
+  },
+  async create<TPayload, TResult>(entity: EntityKey, payload: TPayload) {
+    return unwrap<TResult>(await apiClient.post(`/${entity}`, payload));
+  },
+  async update<TPayload, TResult>(entity: EntityKey, id: string, payload: TPayload) {
+    return unwrap<TResult>(await apiClient.patch(`/${entity}/${id}`, payload));
+  },
+  async remove<T>(entity: EntityKey, id: string) {
+    return unwrap<T>(await apiClient.delete(`/${entity}/${id}`));
   },
 };

@@ -6,6 +6,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import {
   CreateNotificationDto,
   NotificationQueryDto,
+  UpdateNotificationDto,
 } from './dto/notification.dto';
 import { NotificationsService } from './notifications.service';
 
@@ -16,8 +17,12 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
-  findAll(@CurrentUser('id') userId: string, @Query() query: NotificationQueryDto) {
-    return this.notificationsService.findAll(userId, query);
+  findAll(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: Role,
+    @Query() query: NotificationQueryDto,
+  ) {
+    return this.notificationsService.findAll(userId, role, query);
   }
 
   @Get('unread-count')
@@ -26,9 +31,15 @@ export class NotificationsController {
   }
 
   @Post()
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.PROPERTY_MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER, Role.PROPERTY_MANAGER)
   create(@Body() dto: CreateNotificationDto) {
     return this.notificationsService.create(dto);
+  }
+
+  @Patch(':id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER, Role.PROPERTY_MANAGER)
+  update(@Param('id') id: string, @Body() dto: UpdateNotificationDto) {
+    return this.notificationsService.update(id, dto);
   }
 
   @Patch(':id/read')
@@ -42,7 +53,11 @@ export class NotificationsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser('id') userId: string) {
-    return this.notificationsService.remove(id, userId);
+  remove(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: Role,
+  ) {
+    return this.notificationsService.remove(id, userId, role);
   }
 }

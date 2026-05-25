@@ -31,7 +31,7 @@ export const DashboardPage = () => {
     );
   }
 
-  const maxRevenue = Math.max(...data.analytics.revenueTrend.map((item) => item.value));
+  const maxRevenue = Math.max(...data.analytics.revenueTrend.map((item) => item.value), 1);
 
   return (
     <div className="grid gap-6 p-5 md:p-8">

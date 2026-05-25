@@ -7,6 +7,10 @@ export class NotificationQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   unread?: string;
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }
 
 export class CreateNotificationDto {

@@ -22,7 +22,7 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config as { _retry?: boolean; headers: Record<string, string> };
+    const originalRequest = error.config as { _retry?: boolean; headers?: Record<string, string> };
     const refreshToken = useAuthStore.getState().refreshToken;
 
     if (error.response?.status === 401 && refreshToken && !originalRequest._retry) {
@@ -36,6 +36,7 @@ apiClient.interceptors.response.use(
         );
         const session = response.data.data;
         useAuthStore.getState().setSession(session);
+        originalRequest.headers = originalRequest.headers ?? {};
         originalRequest.headers.Authorization = `Bearer ${session.accessToken}`;
         return apiClient(originalRequest);
       } catch {
@@ -54,13 +55,51 @@ export const unwrap = <T>(response: AxiosResponse<ApiEnvelope<T> | T>): T => {
     : (payload as T);
 };
 
-export const requestWithFallback = async <T>(
-  request: Promise<AxiosResponse<ApiEnvelope<T> | T>>,
-  fallback: T,
-): Promise<T> => {
-  try {
-    return unwrap(await request);
-  } catch {
-    return fallback;
+const extractServerMessage = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
   }
+
+  const errorPayload = payload as { error?: unknown; message?: unknown };
+  if (typeof errorPayload.message === 'string') {
+    return errorPayload.message;
+  }
+
+  if (errorPayload.error && typeof errorPayload.error === 'object') {
+    const nested = errorPayload.error as { message?: unknown };
+    if (Array.isArray(nested.message)) {
+      return nested.message.join(', ');
+    }
+    if (typeof nested.message === 'string') {
+      return nested.message;
+    }
+  }
+
+  return null;
+};
+
+export const getApiErrorMessage = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return 'Unexpected client error. Try again.';
+  }
+
+  if (!error.response) {
+    return 'Backend API is unavailable. Confirm the NestJS server is running and the API URL is correct.';
+  }
+
+  const serverMessage = extractServerMessage(error.response.data);
+
+  if (error.response.status === 401) {
+    return serverMessage ?? 'Your session expired. Sign in again.';
+  }
+
+  if (error.response.status === 403) {
+    return serverMessage ?? 'Your role is not allowed to access this module.';
+  }
+
+  if (error.response.status >= 500) {
+    return serverMessage ?? 'Backend server error. Check the API logs and retry.';
+  }
+
+  return serverMessage ?? 'Request failed. Check the submitted data and retry.';
 };

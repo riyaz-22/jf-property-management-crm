@@ -1,19 +1,19 @@
 import {
-  ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Role, User } from '@prisma/client';
+import { User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { getRequiredEnv } from '../../config/env.validation';
 import {
   ForgotPasswordDto,
   LoginDto,
   RefreshTokenDto,
-  RegisterDto,
   ResetPasswordDto,
 } from './dto/auth.dto';
 
@@ -27,39 +27,26 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {}
 
-  async register(dto: RegisterDto, ip?: string) {
-    const email = dto.email.toLowerCase();
-    const existing = await this.prisma.user.findUnique({ where: { email } });
-
-    if (existing) {
-      throw new ConflictException('A user with this email already exists');
-    }
-
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        phone: dto.phone,
-        role: dto.role ?? Role.PROPERTY_MANAGER,
-      },
-    });
-
-    return this.createSession(user, ip);
-  }
-
   async login(dto: LoginDto, ip?: string) {
     const user = await this.prisma.user.findFirst({
       where: {
         email: dto.email.toLowerCase(),
-        deletedAt: null,
-        isActive: true,
       },
     });
 
-    if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (user.deletedAt || !user.isActive) {
+      throw new ForbiddenException('Account is inactive. Contact an administrator.');
+    }
+
+    if (!user.role) {
+      throw new ForbiddenException('Account role is missing. Contact an administrator.');
+    }
+
+    if (!(await bcrypt.compare(dto.password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -85,7 +72,7 @@ export class AuthService {
       storedToken.user.deletedAt ||
       !storedToken.user.isActive
     ) {
-      throw new UnauthorizedException('Refresh token is invalid or expired');
+      throw new UnauthorizedException('Refresh token is invalid, expired, or revoked');
     }
 
     const refreshToken = this.createOpaqueToken();
@@ -231,10 +218,17 @@ export class AuthService {
         role: user.role,
       },
       {
-        secret:
-          this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret',
+        secret: this.jwtSecret(),
         expiresIn: (this.config.get<string>('JWT_ACCESS_TTL') ?? '15m') as never,
       },
+    );
+  }
+
+  private jwtSecret() {
+    return (
+      this.config.get<string>('JWT_SECRET') ??
+      this.config.get<string>('JWT_ACCESS_SECRET') ??
+      getRequiredEnv('JWT_SECRET', ['JWT_ACCESS_SECRET'])
     );
   }
 

@@ -1,13 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import {
   getPaginatedResponse,
   getPagination,
 } from '../../common/utils/pagination';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, UserQueryDto } from './dto/user.dto';
 
 const userSelect = {
   id: true,
@@ -27,10 +26,11 @@ const userSelect = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: PaginationQueryDto) {
+  async findAll(query: UserQueryDto) {
     const { page, limit, skip, take } = getPagination(query);
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
+      ...(query.role ? { role: query.role } : {}),
       ...(query.search
         ? {
             OR: [
@@ -93,6 +93,16 @@ export class UsersService {
   async update(id: string, dto: UpdateUserDto) {
     await this.findOne(id);
     const { password, email, ...data } = dto;
+
+    if (email) {
+      const existing = await this.prisma.user.findUnique({
+        where: { email: email.toLowerCase() },
+      });
+
+      if (existing && existing.id !== id) {
+        throw new ConflictException('A user with this email already exists');
+      }
+    }
 
     return this.prisma.user.update({
       where: { id },

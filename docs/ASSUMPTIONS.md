@@ -4,12 +4,12 @@
 
 - The repository is the submission source code repository.
 - PostgreSQL is the only database target.
-- JWT authentication is implemented even though the prompt allows it to be optional for a demo.
+- JWT authentication is implemented even though the prompt allows it to be optional.
 - The screenshots represent the most important UI workflow: contact directory, contact detail, sell intent workspace, and valuation scheduling.
 - The existing frontend architecture was mostly an empty scaffold with intended folders, so the implementation reused those folder names and filled the missing modules.
-- Email delivery for password reset is not wired to an SMTP provider; the backend creates a reset token and returns it for demo/evaluation.
+- Email delivery for password reset is not wired to an SMTP provider; the backend creates a reset token and returns it for local evaluation.
 - File upload stores an attachment URL placeholder. Production storage would use S3, Azure Blob, local storage with static serving, or another configured asset store.
-- The frontend includes demo fallback data so evaluators can inspect the UI before starting PostgreSQL/backend services.
+- The operational CRM modules require the backend and PostgreSQL to be running; API failure states are shown in the UI instead of silently substituting mock records.
 
 ## Technical Considerations
 

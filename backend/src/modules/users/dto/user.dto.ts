@@ -8,6 +8,13 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
+import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+
+export class UserQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsEnum(Role)
+  role?: Role;
+}
 
 export class CreateUserDto {
   @IsEmail()

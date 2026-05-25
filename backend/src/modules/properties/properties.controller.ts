@@ -26,13 +26,13 @@ export class PropertiesController {
   }
 
   @Post()
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.PROPERTY_MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER, Role.PROPERTY_MANAGER)
   create(@Body() dto: CreatePropertyDto) {
     return this.propertiesService.create(dto);
   }
 
   @Patch(':id')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.PROPERTY_MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER, Role.PROPERTY_MANAGER)
   update(@Param('id') id: string, @Body() dto: UpdatePropertyDto) {
     return this.propertiesService.update(id, dto);
   }

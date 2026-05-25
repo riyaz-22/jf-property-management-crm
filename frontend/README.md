@@ -38,7 +38,7 @@ npm run build
 ```text
 src/app          providers, router, auth store
 src/components   reusable UI primitives
-src/constants    demo fallback data
+src/constants    reference data for contact-intelligence screen content
 src/layouts      auth layout and app shell
 src/modules      feature pages
 src/services     Axios API clients

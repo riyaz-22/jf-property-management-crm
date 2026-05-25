@@ -25,7 +25,7 @@ Backend:
 ## Main Features
 
 - Authentication: login, logout, forgot password, reset password, JWT refresh flow, protected frontend routes.
-- Dashboard: KPI cards, analytics, activity feed, fallback demo data.
+- Dashboard: KPI cards, analytics, and activity feed calculated dynamically from PostgreSQL.
 - Contacts: screenshot-matched contact directory, contact drawer, contact detail, sell intent workspace, valuation scheduler.
 - Properties: CRUD-ready listing, search/filter/sort API support, soft delete.
 - Tenants: CRUD-ready tenant records, property assignment endpoint.
@@ -142,7 +142,14 @@ Open:
 Seed login:
 
 ```text
-Email: admin@jfcrm.local
+Email: admin@jfcrm.com
+Password: Password123!
+```
+
+Additional seeded manager:
+
+```text
+Email: manager@jfcrm.com
 Password: Password123!
 ```
 
@@ -187,6 +194,6 @@ Database design notes are in [docs/DATABASE.md](docs/DATABASE.md).
 - Assumptions and technical considerations: [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md)
 - AI chat history summary: [docs/AI_CHAT_HISTORY.md](docs/AI_CHAT_HISTORY.md)
 
-## Demo Behavior
+## Production Behavior
 
-The frontend uses real Axios services and protected routes. For evaluator convenience, list/dashboard pages include demo fallback data when the backend is offline. Authentication only falls back to a demo session when the API is unreachable; if the backend responds with an auth error, invalid credentials remain invalid.
+The frontend uses real Axios services and protected routes. CRM modules load from the NestJS API, and the NestJS API persists all CRUD data in PostgreSQL through Prisma. Dashboard metrics are calculated from live database rows, not hardcoded values.

@@ -24,6 +24,8 @@ export class DashboardService {
       overduePayments,
       monthlyRevenue,
       openTickets,
+      revenuePayments,
+      maintenanceByStatus,
       recentActivity,
     ] = await this.prisma.$transaction([
       this.prisma.property.count({ where: { deletedAt: null } }),
@@ -72,6 +74,25 @@ export class DashboardService {
           },
         },
       }),
+      this.prisma.payment.findMany({
+        where: {
+          deletedAt: null,
+          status: PaymentStatus.PAID,
+          paidAt: {
+            gte: new Date(today.getFullYear(), today.getMonth() - 4, 1),
+          },
+        },
+        select: {
+          amount: true,
+          paidAt: true,
+        },
+      }),
+      this.prisma.maintenanceTicket.groupBy({
+        by: ['status'],
+        where: { deletedAt: null },
+        orderBy: { status: 'asc' },
+        _count: true,
+      }),
       this.prisma.activity.findMany({
         orderBy: { createdAt: 'desc' },
         take: 8,
@@ -91,6 +112,21 @@ export class DashboardService {
       }),
     ]);
 
+    const revenueTrend = Array.from({ length: 5 }, (_, index) => {
+      const date = new Date(today.getFullYear(), today.getMonth() - 4 + index, 1);
+      const label = date.toLocaleString('en-GB', { month: 'short' });
+      const value = revenuePayments
+        .filter(
+          (payment) =>
+            payment.paidAt &&
+            payment.paidAt.getFullYear() === date.getFullYear() &&
+            payment.paidAt.getMonth() === date.getMonth(),
+        )
+        .reduce((sum, payment) => sum + Number(payment.amount), 0);
+
+      return { label, value };
+    });
+
     return {
       kpis: {
         properties,
@@ -103,18 +139,11 @@ export class DashboardService {
         openTickets,
       },
       analytics: {
-        revenueTrend: [
-          { label: 'Jan', value: 68000 },
-          { label: 'Feb', value: 72000 },
-          { label: 'Mar', value: 76000 },
-          { label: 'Apr', value: 73500 },
-          { label: 'May', value: Number(monthlyRevenue._sum.amount ?? 81200) },
-        ],
-        maintenanceByStatus: [
-          { label: 'Open', value: openTickets },
-          { label: 'Resolved', value: 19 },
-          { label: 'Waiting', value: 6 },
-        ],
+        revenueTrend,
+        maintenanceByStatus: maintenanceByStatus.map((item) => ({
+          label: item.status,
+          value: Number(item._count),
+        })),
       },
       recentActivity,
     };

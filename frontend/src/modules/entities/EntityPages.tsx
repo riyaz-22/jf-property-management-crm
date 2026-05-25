@@ -1,9 +1,14 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Plus, Search, SlidersHorizontal } from 'lucide-react';
-import { useState } from 'react';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Eye,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 import {
   Badge,
   Button,
@@ -13,7 +18,8 @@ import {
   TextInput,
   type Column,
 } from '../../components/ui/Primitives';
-import { crmService } from '../../services/crm';
+import { crmService, type ListParams } from '../../services/crm';
+import { getApiErrorMessage } from '../../services/api';
 import type { EntityKey, Paginated } from '../../types/domain';
 import { formatCurrency, formatDate } from '../../utils/cn';
 
@@ -22,49 +28,120 @@ type EntityRow = {
   [key: string]: unknown;
 };
 
+type FieldOption = {
+  label: string;
+  value: string;
+};
+
+type FieldConfig = {
+  name: string;
+  label: string;
+  type?: 'text' | 'email' | 'number' | 'date' | 'password' | 'textarea' | 'select';
+  required?: boolean;
+  options?: FieldOption[];
+  optionSource?: EntityKey | 'users';
+  getOptionLabel?: (row: EntityRow) => string;
+};
+
 type EntityConfig = {
   key: EntityKey;
   title: string;
   eyebrow: string;
   description: string;
   createLabel: string;
+  defaultSort: string;
+  statusFilter?: FieldOption[];
+  fields: FieldConfig[];
   columns: Column<EntityRow>[];
+  mapPayload: (values: Record<string, string>, mode: 'create' | 'edit') => Record<string, unknown>;
+  getDefaults: (row?: EntityRow) => Record<string, string>;
 };
 
+const enumOptions = {
+  propertyType: ['FLAT', 'HOUSE', 'TOWNHOUSE', 'COMMERCIAL', 'LAND'],
+  propertyStatus: ['DRAFT', 'AVAILABLE', 'OCCUPIED', 'UNDER_MAINTENANCE', 'SOLD', 'ARCHIVED'],
+  leaseStatus: ['DRAFT', 'ACTIVE', 'EXPIRING', 'RENEWED', 'TERMINATED'],
+  paymentStatus: ['PENDING', 'PAID', 'PARTIAL', 'OVERDUE', 'FAILED', 'REFUNDED'],
+  paymentMethod: ['CASH', 'BANK_TRANSFER', 'CARD', 'DIRECT_DEBIT'],
+  maintenancePriority: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
+  maintenanceStatus: ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_TENANT', 'COMPLETED', 'CANCELLED'],
+  notificationType: ['INFO', 'SUCCESS', 'WARNING', 'ERROR', 'TASK'],
+  roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'PROPERTY_MANAGER', 'AGENT', 'ACCOUNTANT', 'MAINTENANCE', 'VIEWER'],
+};
+
+const toOptions = (values: readonly string[]) =>
+  values.map((value) => ({ label: value.replaceAll('_', ' '), value }));
+
+const toNumber = (value?: string) => (value ? Number(value) : undefined);
+const emptyToUndefined = (value?: string) => (value?.trim() ? value.trim() : undefined);
+
 const statusTone = (status: string) => {
-  if (['ACTIVE', 'PAID', 'OCCUPIED', 'COMPLETED', 'AVAILABLE'].includes(status)) {
+  if (['ACTIVE', 'PAID', 'OCCUPIED', 'COMPLETED', 'AVAILABLE', 'SUCCESS'].includes(status)) {
     return 'green';
   }
-  if (['PENDING', 'EXPIRING', 'ASSIGNED', 'UNDER_MAINTENANCE'].includes(status)) {
+  if (['PENDING', 'EXPIRING', 'ASSIGNED', 'UNDER_MAINTENANCE', 'WARNING'].includes(status)) {
     return 'amber';
   }
-  if (['OVERDUE', 'FAILED', 'URGENT'].includes(status)) {
+  if (['OVERDUE', 'FAILED', 'URGENT', 'ERROR'].includes(status)) {
     return 'red';
   }
   return 'slate';
 };
 
-const nameOf = (row: EntityRow) => {
-  const firstName = String(row.firstName ?? '');
-  const lastName = String(row.lastName ?? '');
-  return `${firstName} ${lastName}`.trim();
-};
+const nameOf = (row: EntityRow) =>
+  `${String(row.firstName ?? '')} ${String(row.lastName ?? '')}`.trim();
+
+const nestedValue = (row: EntityRow, key: string) =>
+  row[key] as { id?: string; title?: string; firstName?: string; lastName?: string } | undefined;
 
 const nestedTitle = (row: EntityRow, key: string) => {
-  const value = row[key] as { title?: string; firstName?: string; lastName?: string } | undefined;
+  const value = nestedValue(row, key);
   if (!value) {
     return '-';
   }
   return value.title ?? `${value.firstName ?? ''} ${value.lastName ?? ''}`.trim();
 };
 
+const textValue = (row: EntityRow | undefined, key: string) =>
+  row?.[key] == null ? '' : String(row[key]);
+
+const dateValue = (row: EntityRow | undefined, key: string) =>
+  row?.[key] ? String(row[key]).slice(0, 10) : '';
+
+const relationId = (row: EntityRow | undefined, key: string) => nestedValue(row ?? { id: '' }, key)?.id ?? '';
+
+const mapBase = (values: Record<string, string>, fields: string[]) =>
+  fields.reduce<Record<string, unknown>>((payload, field) => {
+    payload[field] = emptyToUndefined(values[field]);
+    return payload;
+  }, {});
+
 const entityConfigs: Record<EntityKey, EntityConfig> = {
   properties: {
     key: 'properties',
     title: 'Properties',
     eyebrow: 'Portfolio',
-    description: 'CRUD-ready property inventory with search, filters, sort, and pagination APIs.',
+    description: 'Live PostgreSQL property inventory with create, edit, delete, search, filters, sorting, and pagination.',
     createLabel: 'Add property',
+    defaultSort: 'createdAt',
+    statusFilter: toOptions(enumOptions.propertyStatus),
+    fields: [
+      { name: 'reference', label: 'Reference', required: true },
+      { name: 'title', label: 'Property title', required: true },
+      { name: 'type', label: 'Type', type: 'select', required: true, options: toOptions(enumOptions.propertyType) },
+      { name: 'status', label: 'Status', type: 'select', required: true, options: toOptions(enumOptions.propertyStatus) },
+      { name: 'addressLine1', label: 'Address line 1', required: true },
+      { name: 'city', label: 'City', required: true },
+      { name: 'postcode', label: 'Postcode', required: true },
+      { name: 'bedrooms', label: 'Bedrooms', type: 'number', required: true },
+      { name: 'bathrooms', label: 'Bathrooms', type: 'number', required: true },
+      { name: 'rentAmount', label: 'Monthly rent', type: 'number', required: true },
+      { name: 'depositAmount', label: 'Deposit', type: 'number', required: true },
+      { name: 'askingPrice', label: 'Asking price', type: 'number' },
+      { name: 'ownerName', label: 'Owner name' },
+      { name: 'ownerEmail', label: 'Owner email', type: 'email' },
+      { name: 'managerId', label: 'Manager', type: 'select', optionSource: 'users', getOptionLabel: nameOf },
+    ],
     columns: [
       { header: 'Reference', cell: (row) => <span className="font-black">{String(row.reference)}</span> },
       { header: 'Property', cell: (row) => <span className="font-bold">{String(row.title)}</span> },
@@ -72,13 +149,48 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
       { header: 'Rent', cell: (row) => formatCurrency(Number(row.rentAmount ?? 0)) },
       { header: 'Status', cell: (row) => <Badge tone={statusTone(String(row.status))}>{String(row.status)}</Badge> },
     ],
+    mapPayload: (values) => ({
+      ...mapBase(values, ['reference', 'title', 'type', 'status', 'addressLine1', 'city', 'postcode', 'ownerName', 'ownerEmail', 'managerId']),
+      bedrooms: Number(values.bedrooms),
+      bathrooms: Number(values.bathrooms),
+      rentAmount: Number(values.rentAmount),
+      depositAmount: Number(values.depositAmount),
+      askingPrice: toNumber(values.askingPrice),
+    }),
+    getDefaults: (row) => ({
+      reference: textValue(row, 'reference'),
+      title: textValue(row, 'title'),
+      type: textValue(row, 'type') || 'FLAT',
+      status: textValue(row, 'status') || 'DRAFT',
+      addressLine1: textValue(row, 'addressLine1'),
+      city: textValue(row, 'city'),
+      postcode: textValue(row, 'postcode'),
+      bedrooms: textValue(row, 'bedrooms') || '1',
+      bathrooms: textValue(row, 'bathrooms') || '1',
+      rentAmount: textValue(row, 'rentAmount') || '1000',
+      depositAmount: textValue(row, 'depositAmount') || '2000',
+      askingPrice: textValue(row, 'askingPrice'),
+      ownerName: textValue(row, 'ownerName'),
+      ownerEmail: textValue(row, 'ownerEmail'),
+      managerId: relationId(row, 'manager'),
+    }),
   },
   tenants: {
     key: 'tenants',
     title: 'Tenants',
     eyebrow: 'Resident records',
-    description: 'Tenant CRUD, lease assignment, contact information, and property mapping.',
+    description: 'Tenant records are persisted in PostgreSQL and can be assigned to active properties.',
     createLabel: 'Add tenant',
+    defaultSort: 'createdAt',
+    statusFilter: toOptions(['ACTIVE', 'APPLICANT', 'NOTICE_GIVEN', 'ARCHIVED']),
+    fields: [
+      { name: 'firstName', label: 'First name', required: true },
+      { name: 'lastName', label: 'Last name', required: true },
+      { name: 'email', label: 'Email', type: 'email', required: true },
+      { name: 'phone', label: 'Phone' },
+      { name: 'status', label: 'Status', type: 'select', required: true, options: toOptions(['ACTIVE', 'APPLICANT', 'NOTICE_GIVEN', 'ARCHIVED']) },
+      { name: 'currentPropertyId', label: 'Current property', type: 'select', optionSource: 'properties', getOptionLabel: (row) => String(row.title) },
+    ],
     columns: [
       { header: 'Name', cell: (row) => <span className="font-black">{nameOf(row)}</span> },
       { header: 'Email', cell: (row) => String(row.email) },
@@ -86,13 +198,34 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
       { header: 'Property', cell: (row) => nestedTitle(row, 'currentProperty') },
       { header: 'Status', cell: (row) => <Badge tone={statusTone(String(row.status))}>{String(row.status)}</Badge> },
     ],
+    mapPayload: (values) => mapBase(values, ['firstName', 'lastName', 'email', 'phone', 'status', 'currentPropertyId']),
+    getDefaults: (row) => ({
+      firstName: textValue(row, 'firstName'),
+      lastName: textValue(row, 'lastName'),
+      email: textValue(row, 'email'),
+      phone: textValue(row, 'phone'),
+      status: textValue(row, 'status') || 'ACTIVE',
+      currentPropertyId: relationId(row, 'currentProperty'),
+    }),
   },
   leases: {
     key: 'leases',
     title: 'Leases',
     eyebrow: 'Lifecycle',
-    description: 'Lease lifecycle management, renewals, expiry tracking, and rent terms.',
+    description: 'Lease lifecycle management with renewal, expiry, and rent tracking.',
     createLabel: 'Create lease',
+    defaultSort: 'endDate',
+    statusFilter: toOptions(enumOptions.leaseStatus),
+    fields: [
+      { name: 'propertyId', label: 'Property', type: 'select', required: true, optionSource: 'properties', getOptionLabel: (row) => String(row.title) },
+      { name: 'tenantId', label: 'Tenant', type: 'select', required: true, optionSource: 'tenants', getOptionLabel: nameOf },
+      { name: 'startDate', label: 'Start date', type: 'date', required: true },
+      { name: 'endDate', label: 'End date', type: 'date', required: true },
+      { name: 'rentAmount', label: 'Rent amount', type: 'number', required: true },
+      { name: 'depositAmount', label: 'Deposit amount', type: 'number', required: true },
+      { name: 'status', label: 'Status', type: 'select', required: true, options: toOptions(enumOptions.leaseStatus) },
+      { name: 'notes', label: 'Notes', type: 'textarea' },
+    ],
     columns: [
       { header: 'Property', cell: (row) => nestedTitle(row, 'property') },
       { header: 'Tenant', cell: (row) => nestedTitle(row, 'tenant') },
@@ -100,13 +233,41 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
       { header: 'Ends', cell: (row) => formatDate(String(row.endDate)) },
       { header: 'Status', cell: (row) => <Badge tone={statusTone(String(row.status))}>{String(row.status)}</Badge> },
     ],
+    mapPayload: (values) => ({
+      ...mapBase(values, ['propertyId', 'tenantId', 'startDate', 'endDate', 'status', 'notes']),
+      rentAmount: Number(values.rentAmount),
+      depositAmount: Number(values.depositAmount),
+    }),
+    getDefaults: (row) => ({
+      propertyId: relationId(row, 'property'),
+      tenantId: relationId(row, 'tenant'),
+      startDate: dateValue(row, 'startDate'),
+      endDate: dateValue(row, 'endDate'),
+      rentAmount: textValue(row, 'rentAmount') || '1000',
+      depositAmount: textValue(row, 'depositAmount') || '2000',
+      status: textValue(row, 'status') || 'DRAFT',
+      notes: textValue(row, 'notes'),
+    }),
   },
   payments: {
     key: 'payments',
     title: 'Payments',
     eyebrow: 'Finance',
-    description: 'Payment tracking, transactions, reconciliations, and due reminders.',
+    description: 'Payment tracking, due reminders, reconciliation, and transaction status.',
     createLabel: 'Record payment',
+    defaultSort: 'dueDate',
+    statusFilter: toOptions(enumOptions.paymentStatus),
+    fields: [
+      { name: 'reference', label: 'Reference', required: true },
+      { name: 'propertyId', label: 'Property', type: 'select', required: true, optionSource: 'properties', getOptionLabel: (row) => String(row.title) },
+      { name: 'tenantId', label: 'Tenant', type: 'select', required: true, optionSource: 'tenants', getOptionLabel: nameOf },
+      { name: 'leaseId', label: 'Lease', type: 'select', optionSource: 'leases', getOptionLabel: (row) => `${nestedTitle(row, 'property')} / ${nestedTitle(row, 'tenant')}` },
+      { name: 'amount', label: 'Amount', type: 'number', required: true },
+      { name: 'dueDate', label: 'Due date', type: 'date', required: true },
+      { name: 'status', label: 'Status', type: 'select', required: true, options: toOptions(enumOptions.paymentStatus) },
+      { name: 'method', label: 'Method', type: 'select', options: toOptions(enumOptions.paymentMethod) },
+      { name: 'notes', label: 'Notes', type: 'textarea' },
+    ],
     columns: [
       { header: 'Reference', cell: (row) => <span className="font-black">{String(row.reference)}</span> },
       { header: 'Tenant', cell: (row) => nestedTitle(row, 'tenant') },
@@ -114,13 +275,41 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
       { header: 'Due', cell: (row) => formatDate(String(row.dueDate)) },
       { header: 'Status', cell: (row) => <Badge tone={statusTone(String(row.status))}>{String(row.status)}</Badge> },
     ],
+    mapPayload: (values) => ({
+      ...mapBase(values, ['reference', 'propertyId', 'tenantId', 'leaseId', 'dueDate', 'status', 'method', 'notes']),
+      amount: Number(values.amount),
+    }),
+    getDefaults: (row) => ({
+      reference: textValue(row, 'reference'),
+      propertyId: relationId(row, 'property'),
+      tenantId: relationId(row, 'tenant'),
+      leaseId: relationId(row, 'lease'),
+      amount: textValue(row, 'amount') || '1000',
+      dueDate: dateValue(row, 'dueDate'),
+      status: textValue(row, 'status') || 'PENDING',
+      method: textValue(row, 'method'),
+      notes: textValue(row, 'notes'),
+    }),
   },
   maintenance: {
     key: 'maintenance',
     title: 'Maintenance',
     eyebrow: 'Ticket desk',
-    description: 'Ticket assignment workflow, status tracking, priorities, and upload-ready APIs.',
+    description: 'Ticket assignment workflow with priorities, statuses, and assignee tracking.',
     createLabel: 'Open ticket',
+    defaultSort: 'createdAt',
+    statusFilter: toOptions(enumOptions.maintenanceStatus),
+    fields: [
+      { name: 'propertyId', label: 'Property', type: 'select', required: true, optionSource: 'properties', getOptionLabel: (row) => String(row.title) },
+      { name: 'tenantId', label: 'Tenant', type: 'select', optionSource: 'tenants', getOptionLabel: nameOf },
+      { name: 'assigneeId', label: 'Assignee', type: 'select', optionSource: 'users', getOptionLabel: nameOf },
+      { name: 'title', label: 'Title', required: true },
+      { name: 'description', label: 'Description', type: 'textarea', required: true },
+      { name: 'priority', label: 'Priority', type: 'select', required: true, options: toOptions(enumOptions.maintenancePriority) },
+      { name: 'status', label: 'Status', type: 'select', required: true, options: toOptions(enumOptions.maintenanceStatus) },
+      { name: 'dueDate', label: 'Due date', type: 'date' },
+      { name: 'cost', label: 'Estimated cost', type: 'number' },
+    ],
     columns: [
       { header: 'Ticket', cell: (row) => <span className="font-black">{String(row.title)}</span> },
       { header: 'Property', cell: (row) => nestedTitle(row, 'property') },
@@ -128,27 +317,69 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
       { header: 'Status', cell: (row) => <Badge tone={statusTone(String(row.status))}>{String(row.status)}</Badge> },
       { header: 'Due', cell: (row) => (row.dueDate ? formatDate(String(row.dueDate)) : '-') },
     ],
+    mapPayload: (values) => ({
+      ...mapBase(values, ['propertyId', 'tenantId', 'assigneeId', 'title', 'description', 'priority', 'status', 'dueDate']),
+      cost: toNumber(values.cost),
+    }),
+    getDefaults: (row) => ({
+      propertyId: relationId(row, 'property'),
+      tenantId: relationId(row, 'tenant'),
+      assigneeId: relationId(row, 'assignee'),
+      title: textValue(row, 'title'),
+      description: textValue(row, 'description'),
+      priority: textValue(row, 'priority') || 'MEDIUM',
+      status: textValue(row, 'status') || 'OPEN',
+      dueDate: dateValue(row, 'dueDate'),
+      cost: textValue(row, 'cost'),
+    }),
   },
   notifications: {
     key: 'notifications',
     title: 'Notifications',
     eyebrow: 'Notification center',
-    description: 'Alerts, reminders, task notifications, and read/unread status.',
+    description: 'Persisted alerts, reminders, and task notifications scoped to users.',
     createLabel: 'Create alert',
+    defaultSort: 'createdAt',
+    fields: [
+      { name: 'userId', label: 'Recipient', type: 'select', required: true, optionSource: 'users', getOptionLabel: nameOf },
+      { name: 'title', label: 'Title', required: true },
+      { name: 'message', label: 'Message', type: 'textarea', required: true },
+      { name: 'type', label: 'Type', type: 'select', required: true, options: toOptions(enumOptions.notificationType) },
+      { name: 'link', label: 'Link' },
+    ],
     columns: [
       { header: 'Title', cell: (row) => <span className="font-black">{String(row.title)}</span> },
       { header: 'Message', cell: (row) => String(row.message) },
-      { header: 'Type', cell: (row) => <Badge tone="blue">{String(row.type)}</Badge> },
+      { header: 'Type', cell: (row) => <Badge tone={statusTone(String(row.type))}>{String(row.type)}</Badge> },
       { header: 'Created', cell: (row) => formatDate(String(row.createdAt)) },
       { header: 'Read', cell: (row) => (row.readAt ? 'Read' : 'Unread') },
     ],
+    mapPayload: (values) => mapBase(values, ['userId', 'title', 'message', 'type', 'link']),
+    getDefaults: (row) => ({
+      userId: textValue(row, 'userId'),
+      title: textValue(row, 'title'),
+      message: textValue(row, 'message'),
+      type: textValue(row, 'type') || 'INFO',
+      link: textValue(row, 'link'),
+    }),
   },
   users: {
     key: 'users',
     title: 'User Management',
     eyebrow: 'RBAC',
-    description: 'Roles, permissions, user profiles, activation state, and secure admin APIs.',
-    createLabel: 'Invite user',
+    description: 'Users, roles, activation state, profile data, and admin-only account management.',
+    createLabel: 'Add user',
+    defaultSort: 'createdAt',
+    statusFilter: toOptions(enumOptions.roles),
+    fields: [
+      { name: 'firstName', label: 'First name', required: true },
+      { name: 'lastName', label: 'Last name', required: true },
+      { name: 'email', label: 'Email', type: 'email', required: true },
+      { name: 'password', label: 'Password', type: 'password', required: true },
+      { name: 'phone', label: 'Phone' },
+      { name: 'role', label: 'Role', type: 'select', required: true, options: toOptions(enumOptions.roles) },
+      { name: 'isActive', label: 'Status', type: 'select', required: true, options: [{ label: 'Active', value: 'true' }, { label: 'Disabled', value: 'false' }] },
+    ],
     columns: [
       { header: 'Name', cell: (row) => <span className="font-black">{nameOf(row)}</span> },
       { header: 'Email', cell: (row) => String(row.email) },
@@ -156,41 +387,239 @@ const entityConfigs: Record<EntityKey, EntityConfig> = {
       { header: 'Phone', cell: (row) => String(row.phone ?? '-') },
       { header: 'Status', cell: (row) => <Badge tone={row.isActive ? 'green' : 'red'}>{row.isActive ? 'Active' : 'Disabled'}</Badge> },
     ],
+    mapPayload: (values, mode) => ({
+      ...mapBase(values, ['firstName', 'lastName', 'email', 'phone', 'role']),
+      ...(values.password || mode === 'create' ? { password: values.password } : {}),
+      ...(mode === 'edit' ? { isActive: values.isActive === 'true' } : {}),
+    }),
+    getDefaults: (row) => ({
+      firstName: textValue(row, 'firstName'),
+      lastName: textValue(row, 'lastName'),
+      email: textValue(row, 'email'),
+      password: '',
+      phone: textValue(row, 'phone'),
+      role: textValue(row, 'role') || 'STAFF',
+      isActive: row?.isActive === false ? 'false' : 'true',
+    }),
   },
 };
 
-const createSchema = z.object({
-  title: z.string().min(2, 'Enter at least 2 characters'),
-  reference: z.string().min(2, 'Enter a reference'),
-});
+const relationKeys: EntityKey[] = ['properties', 'tenants', 'leases', 'users'];
 
-type CreateForm = z.infer<typeof createSchema>;
-
-export const EntityPage = ({ entity }: { entity: EntityKey }) => {
-  const [modalOpen, setModalOpen] = useState(false);
-  const config = entityConfigs[entity];
-  const { data, isLoading } = useQuery({
-    queryKey: [entity],
-    queryFn: () => crmService.list<EntityRow>(entity),
-  });
+const EntityForm = ({
+  config,
+  mode,
+  record,
+  options,
+  onSubmit,
+  onCancel,
+  isSaving,
+}: {
+  config: EntityConfig;
+  mode: 'create' | 'edit';
+  record?: EntityRow;
+  options: Partial<Record<EntityKey | 'users', EntityRow[]>>;
+  onSubmit: (values: Record<string, string>) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) => {
   const {
     register,
     handleSubmit,
-    reset,
     formState: { errors },
-  } = useForm<CreateForm>({
-    resolver: zodResolver(createSchema),
+  } = useForm<Record<string, string>>({
+    defaultValues: config.getDefaults(record),
   });
 
-  const createRecord = useMutation({
-    mutationFn: (values: CreateForm) => crmService.create<CreateForm, EntityRow>(entity, values),
-    onSuccess: () => {
-      reset();
-      setModalOpen(false);
+  return (
+    <form className="grid gap-4" onSubmit={handleSubmit(onSubmit)}>
+      <div className="grid gap-4 md:grid-cols-2">
+        {config.fields.map((field) => {
+          const validation = {
+            required:
+              field.required && !(field.name === 'password' && mode === 'edit')
+                ? `${field.label} is required`
+                : false,
+          };
+          const error = errors[field.name]?.message as string | undefined;
+
+          if (field.type === 'textarea') {
+            return (
+              <label key={field.name} className="grid gap-2 text-sm font-semibold text-slate-700 md:col-span-2">
+                {field.label}
+                <textarea
+                  className="min-h-28 rounded-md border border-slate-200 bg-white px-3 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                  {...register(field.name, validation)}
+                />
+                {error ? <span className="text-xs text-red-600">{error}</span> : null}
+              </label>
+            );
+          }
+
+          if (field.type === 'select') {
+            const fieldOptions =
+              field.options ??
+              (field.optionSource
+                ? (options[field.optionSource] ?? []).map((row) => ({
+                    label: field.getOptionLabel?.(row) ?? String(row.id),
+                    value: row.id,
+                  }))
+                : []);
+
+            return (
+              <label key={field.name} className="grid gap-2 text-sm font-semibold text-slate-700">
+                {field.label}
+                <select
+                  className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                  {...register(field.name, validation)}
+                >
+                  <option value="">Select {field.label.toLowerCase()}</option>
+                  {fieldOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {error ? <span className="text-xs text-red-600">{error}</span> : null}
+              </label>
+            );
+          }
+
+          return (
+            <TextInput
+              key={field.name}
+              label={field.label}
+              type={field.type ?? 'text'}
+              error={error}
+              {...register(field.name, validation)}
+            />
+          );
+        })}
+      </div>
+      <div className="flex justify-end gap-3">
+        <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save record'}</Button>
+      </div>
+    </form>
+  );
+};
+
+export const EntityPage = ({ entity }: { entity: EntityKey }) => {
+  const queryClient = useQueryClient();
+  const config = entityConfigs[entity];
+  const [modal, setModal] = useState<
+    | { type: 'create' }
+    | { type: 'edit'; record: EntityRow }
+    | { type: 'view'; record: EntityRow }
+    | { type: 'delete'; record: EntityRow }
+    | null
+  >(null);
+  const [toast, setToast] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [params, setParams] = useState<ListParams>({
+    page: 1,
+    limit: 10,
+    sortBy: config.defaultSort,
+    sortOrder: 'desc',
+  });
+
+  const listQuery = useQuery({
+    queryKey: [entity, params],
+    queryFn: () => crmService.list<EntityRow>(entity, params),
+    retry: (failureCount, error) => {
+      const message = getApiErrorMessage(error);
+      return failureCount < 2 && !message.includes('role is not') && !message.includes('session expired');
     },
   });
 
-  const rows = ((data as Paginated<EntityRow> | undefined)?.data ?? []) as EntityRow[];
+  const optionQueries = useQueries({
+    queries: relationKeys.map((key) => ({
+      queryKey: ['options', key],
+      queryFn: () => crmService.list<EntityRow>(key, { page: 1, limit: 100, sortBy: 'createdAt', sortOrder: 'desc' }),
+      staleTime: 1000 * 60 * 5,
+    })),
+  });
+
+  const options = useMemo(() => {
+    return relationKeys.reduce<Partial<Record<EntityKey | 'users', EntityRow[]>>>((acc, key, index) => {
+      acc[key] = optionQueries[index].data?.data ?? [];
+      return acc;
+    }, {});
+  }, [optionQueries]);
+
+  const invalidate = async () => {
+    await queryClient.invalidateQueries({ queryKey: [entity] });
+    await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    if (relationKeys.includes(entity)) {
+      await queryClient.invalidateQueries({ queryKey: ['options', entity] });
+    }
+  };
+
+  const createRecord = useMutation({
+    mutationFn: (values: Record<string, string>) =>
+      crmService.create<Record<string, unknown>, EntityRow>(entity, config.mapPayload(values, 'create')),
+    onSuccess: async () => {
+      setModal(null);
+      setToast({ tone: 'success', message: `${config.title} record created.` });
+      await invalidate();
+    },
+    onError: (error) => setToast({ tone: 'error', message: getApiErrorMessage(error) }),
+  });
+
+  const updateRecord = useMutation({
+    mutationFn: ({ id, values }: { id: string; values: Record<string, string> }) =>
+      crmService.update<Record<string, unknown>, EntityRow>(entity, id, config.mapPayload(values, 'edit')),
+    onSuccess: async () => {
+      setModal(null);
+      setToast({ tone: 'success', message: `${config.title} record updated.` });
+      await invalidate();
+    },
+    onError: (error) => setToast({ tone: 'error', message: getApiErrorMessage(error) }),
+  });
+
+  const deleteRecord = useMutation({
+    mutationFn: (id: string) => crmService.remove<EntityRow>(entity, id),
+    onSuccess: async () => {
+      setModal(null);
+      setToast({
+        tone: 'success',
+        message: entity === 'users' ? 'User deactivated.' : `${config.title} record deleted safely.`,
+      });
+      await invalidate();
+    },
+    onError: (error) => setToast({ tone: 'error', message: getApiErrorMessage(error) }),
+  });
+
+  const data = listQuery.data as Paginated<EntityRow> | undefined;
+  const rows = data?.data ?? [];
+  const meta = data?.meta;
+  const canPrevious = Number(meta?.page ?? 1) > 1;
+  const canNext = Number(meta?.page ?? 1) < Number(meta?.totalPages ?? 1);
+
+  const columns: Column<EntityRow>[] = [
+    ...config.columns,
+    {
+      header: 'Actions',
+      className: 'w-44',
+      cell: (row) => (
+        <div className="flex gap-2">
+          <button type="button" aria-label="View" onClick={() => setModal({ type: 'view', record: row })} className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 hover:bg-slate-50">
+            <Eye size={16} />
+          </button>
+          <button type="button" aria-label="Edit" onClick={() => setModal({ type: 'edit', record: row })} className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 hover:bg-slate-50">
+            <Pencil size={16} />
+          </button>
+          <button type="button" aria-label="Delete" onClick={() => setModal({ type: 'delete', record: row })} className="grid h-9 w-9 place-items-center rounded-md border border-red-200 text-red-600 hover:bg-red-50">
+            <Trash2 size={16} />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const applySearch = () => {
+    setParams((current) => ({ ...current, page: 1, search: searchDraft || undefined }));
+  };
 
   return (
     <div className="grid gap-6 p-5 md:p-8">
@@ -201,30 +630,147 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
           <p className="mt-2 max-w-2xl text-sm text-slate-500">{config.description}</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary" icon={<SlidersHorizontal size={18} />}>Filters</Button>
-          <Button onClick={() => setModalOpen(true)} icon={<Plus size={18} />}>{config.createLabel}</Button>
+          <Button variant="secondary" icon={<SlidersHorizontal size={18} />} onClick={applySearch}>Apply filters</Button>
+          <Button onClick={() => setModal({ type: 'create' })} icon={<Plus size={18} />}>{config.createLabel}</Button>
         </div>
       </div>
 
-      <div className="relative max-w-xl">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-        <input
-          className="h-12 w-full rounded-lg border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-          placeholder={`Search ${config.title.toLowerCase()}...`}
-        />
+      {toast ? (
+        <div className={toast.tone === 'success' ? 'rounded-md bg-emerald-50 p-4 text-sm font-bold text-emerald-700' : 'rounded-md bg-red-50 p-4 text-sm font-bold text-red-700'}>
+          {toast.message}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_220px_180px_180px]">
+        <label className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input
+            className="h-11 w-full rounded-md border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            placeholder={`Search ${config.title.toLowerCase()}...`}
+            value={searchDraft}
+            onChange={(event) => setSearchDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                applySearch();
+              }
+            }}
+          />
+        </label>
+        <select
+          className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
+          value={String(params.status ?? '')}
+          onChange={(event) => setParams((current) => ({ ...current, page: 1, status: event.target.value || undefined, role: entity === 'users' ? event.target.value || undefined : undefined }))}
+        >
+          <option value="">{entity === 'users' ? 'All roles' : 'All statuses'}</option>
+          {config.statusFilter?.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <select
+          className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
+          value={String(params.sortBy)}
+          onChange={(event) => setParams((current) => ({ ...current, sortBy: event.target.value }))}
+        >
+          <option value={config.defaultSort}>Default sort</option>
+          <option value="createdAt">Created date</option>
+          <option value="updatedAt">Updated date</option>
+        </select>
+        <select
+          className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none"
+          value={String(params.sortOrder)}
+          onChange={(event) => setParams((current) => ({ ...current, sortOrder: event.target.value as 'asc' | 'desc' }))}
+        >
+          <option value="desc">Descending</option>
+          <option value="asc">Ascending</option>
+        </select>
       </div>
 
-      {isLoading ? <Skeleton className="h-80" /> : <DataTable rows={rows} columns={config.columns} />}
-
-      <Modal title={config.createLabel} open={modalOpen} onClose={() => setModalOpen(false)}>
-        <form className="grid gap-4" onSubmit={handleSubmit((values) => createRecord.mutate(values))}>
-          <TextInput label="Title or name" error={errors.title?.message} {...register('title')} />
-          <TextInput label="Reference" error={errors.reference?.message} {...register('reference')} />
-          <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={createRecord.isPending}>Save record</Button>
+      {listQuery.isError ? (
+        <div className="grid gap-4 rounded-lg border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700">
+          <p>{getApiErrorMessage(listQuery.error)}</p>
+          <div>
+            <Button variant="secondary" onClick={() => void listQuery.refetch()}>
+              Retry
+            </Button>
           </div>
-        </form>
+        </div>
+      ) : listQuery.isLoading ? (
+        <Skeleton className="h-80" />
+      ) : (
+        <DataTable rows={rows} columns={columns} />
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-slate-500">
+          Showing page {meta?.page ?? 1} of {meta?.totalPages ?? 1} ({meta?.total ?? 0} records)
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            disabled={!canPrevious}
+            onClick={() => setParams((current) => ({ ...current, page: Number(current.page ?? 1) - 1 }))}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={!canNext}
+            onClick={() => setParams((current) => ({ ...current, page: Number(current.page ?? 1) + 1 }))}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+
+      <Modal
+        title={modal?.type === 'edit' ? `Edit ${config.title}` : config.createLabel}
+        open={modal?.type === 'create' || modal?.type === 'edit'}
+        onClose={() => setModal(null)}
+      >
+        {modal?.type === 'create' || modal?.type === 'edit' ? (
+          <EntityForm
+            key={modal.type === 'edit' ? modal.record.id : 'create'}
+            config={config}
+            mode={modal.type}
+            record={modal.type === 'edit' ? modal.record : undefined}
+            options={options}
+            onSubmit={(values) =>
+              modal.type === 'edit'
+                ? updateRecord.mutate({ id: modal.record.id, values })
+                : createRecord.mutate(values)
+            }
+            onCancel={() => setModal(null)}
+            isSaving={createRecord.isPending || updateRecord.isPending}
+          />
+        ) : null}
+      </Modal>
+
+      <Modal title={`${config.title} details`} open={modal?.type === 'view'} onClose={() => setModal(null)}>
+        {modal?.type === 'view' ? (
+          <div className="max-h-[60vh] overflow-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">
+            <pre>{JSON.stringify(modal.record, null, 2)}</pre>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal title={entity === 'users' ? 'Deactivate user' : `Delete ${config.title} record`} open={modal?.type === 'delete'} onClose={() => setModal(null)}>
+        {modal?.type === 'delete' ? (
+          <div className="grid gap-5">
+            <p className="text-sm text-slate-600">
+              {entity === 'users'
+                ? 'This will deactivate the selected user and prevent future logins. Existing historical data is preserved.'
+                : 'This will safely delete the selected record using the backend API. Related historical data is preserved by the database rules.'}
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
+              <Button variant="danger" disabled={deleteRecord.isPending} onClick={() => deleteRecord.mutate(modal.record.id)}>
+                {deleteRecord.isPending
+                  ? entity === 'users' ? 'Deactivating...' : 'Deleting...'
+                  : entity === 'users' ? 'Deactivate user' : 'Delete record'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Modal>
     </div>
   );

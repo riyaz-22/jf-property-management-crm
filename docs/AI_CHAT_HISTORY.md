@@ -38,7 +38,7 @@ Added:
 - Prisma schema with normalized relational models.
 - Prisma 7 config using `prisma.config.ts`.
 - Initial SQL migration.
-- Seed script with demo admin, agent, property, tenant, lease, payment, tickets, notifications, and activity.
+- Seed script with login-ready admin/manager users, properties, tenants, leases, payment history, tickets, notifications, and activity.
 - Prisma service/module.
 - JWT auth module.
 - Refresh token rotation.
@@ -78,7 +78,7 @@ Added:
 - Generic entity pages for properties, tenants, leases, payments, maintenance, notifications, and users.
 - Reusable primitives: buttons, cards, badges, modal, inputs, table, stat card, skeleton.
 - Tailwind base styling.
-- Demo fallback data for frontend inspection when backend is offline.
+- API-backed CRUD pages with loading, error, create, edit, delete, search, filter, and pagination behavior.
 
 ## Verification
 

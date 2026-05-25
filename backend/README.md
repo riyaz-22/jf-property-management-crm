@@ -32,7 +32,10 @@ http://localhost:3000/docs
 Seed login:
 
 ```text
-admin@jfcrm.local
+admin@jfcrm.com
+Password123!
+
+manager@jfcrm.com
 Password123!
 ```
 
