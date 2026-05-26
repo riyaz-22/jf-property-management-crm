@@ -11,6 +11,7 @@ import {
   ContactDirectoryPage,
   SellIntentWorkspacePage,
 } from '../../modules/contacts/ContactPages';
+import { CalendarPage } from '../../modules/calendar/CalendarPage';
 import { DashboardPage } from '../../modules/dashboard/DashboardPage';
 import { EntityPage } from '../../modules/entities/EntityPages';
 import type { EntityKey } from '../../types/domain';
@@ -51,6 +52,7 @@ const router = createBrowserRouter([
       { path: 'leases', element: entity('leases') },
       { path: 'payments', element: entity('payments') },
       { path: 'maintenance', element: entity('maintenance') },
+      { path: 'calendar', element: <CalendarPage /> },
       { path: 'notifications', element: entity('notifications') },
       { path: 'users', element: entity('users') },
     ],

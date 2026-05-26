@@ -4,6 +4,7 @@ import {
   LeaseStatus,
   MaintenancePriority,
   MaintenanceStatus,
+  NotificationPriority,
   NotificationType,
   PaymentMethod,
   PaymentStatus,
@@ -374,19 +375,35 @@ async function main() {
   }
 
   const notificationSeed = [
-    ['Lease renewal window', 'The Glass House lease needs renewal review inside 60 days.', NotificationType.TASK, '/leases'],
-    ['Payment reminder ready', 'June rent reminders are queued for active tenants.', NotificationType.INFO, '/payments'],
-    ['Maintenance SLA risk', 'Urgent maintenance tickets need same-day acknowledgement.', NotificationType.WARNING, '/maintenance'],
+    ['Valuation scheduled', 'Marcus Sterling has a valuation booked for The Glass House tomorrow at 10:30.', NotificationType.TASK, NotificationPriority.HIGH, '/contacts/marcus-sterling/sell-intent', 'valuation', 'ValuationAppointment', 'calendar-check'],
+    ['Contact updated', 'Julianne de Luca added new vendor notes and preferred contact hours.', NotificationType.INFO, NotificationPriority.MEDIUM, '/contacts', 'contact', 'Contact', 'user-round'],
+    ['New tenant added', 'Freddie King was added to Skyline Loft with active onboarding details.', NotificationType.SUCCESS, NotificationPriority.MEDIUM, '/tenants', 'tenant', 'Tenant', 'users'],
+    ['Document uploaded', 'Signed agency agreement uploaded for The Glass House sell intent.', NotificationType.INFO, NotificationPriority.LOW, '/contacts/marcus-sterling', 'document', 'ContactDocument', 'file-text'],
+    ['Sell intent completed', 'The vendor qualification checklist is complete and ready for instruction review.', NotificationType.SUCCESS, NotificationPriority.HIGH, '/contacts/marcus-sterling/sell-intent', 'sell-intent', 'SellIntent', 'badge-check'],
+    ['Compliance reminder', 'Gas safety certificate renewal is due this week for Regent\'s Park Crescent.', NotificationType.WARNING, NotificationPriority.URGENT, '/maintenance', 'compliance', 'MaintenanceTicket', 'shield-alert'],
+    ['Pending contract action', 'Buyer-side contract pack is waiting for manager approval before release.', NotificationType.TASK, NotificationPriority.HIGH, '/leases', 'contract', 'Lease', 'clipboard-check'],
   ] as const;
 
-  for (const [title, message, type, link] of notificationSeed) {
+  for (const [title, message, type, priority, actionUrl, relatedEntityId, relatedEntity, icon] of notificationSeed) {
     const existingNotification = await prisma.notification.findFirst({
       where: { userId: admin.id, title, deletedAt: null },
     });
 
     if (!existingNotification) {
       await prisma.notification.create({
-        data: { userId: admin.id, title, message, type, link },
+        data: {
+          userId: admin.id,
+          title,
+          message,
+          type,
+          priority,
+          actionUrl,
+          link: actionUrl,
+          relatedEntity,
+          relatedEntityId,
+          icon,
+          readAt: priority === NotificationPriority.LOW ? new Date(2026, 4, 24, 11, 30) : null,
+        },
       });
     }
   }

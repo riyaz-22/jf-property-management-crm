@@ -106,12 +106,21 @@ export type MaintenanceRecord = {
 
 export type NotificationRecord = {
   id: string;
+  userId: string;
   title: string;
   message: string;
   type: string;
-  readAt?: string;
-  createdAt: string;
+  priority: string;
+  actionUrl?: string;
   link?: string;
+  relatedEntity?: string;
+  relatedEntityId?: string;
+  avatarUrl?: string;
+  icon?: string;
+  readAt?: string;
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type DashboardSummary = {
@@ -239,6 +248,42 @@ export type ValuationAppointment = {
   status: string;
   notes?: string;
   competingAgents?: string;
+};
+
+export type CalendarAppointment = {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  startsAt: string;
+  endsAt: string;
+  durationMinutes: number;
+  agentId?: string;
+  propertyId?: string;
+  contactId?: string;
+  reference?: string;
+  location?: string;
+  notes?: string;
+  reminderAt?: string;
+  agent?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'role'>;
+  contact?: { id?: string; firstName?: string; lastName?: string; email?: string; slug?: string };
+  property?: { id?: string; reference?: string; title?: string; addressLine1?: string };
+};
+
+export type AiChatSession = {
+  id: string;
+  userId?: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AiChatMessage = {
+  id: string;
+  sessionId: string;
+  role: 'USER' | 'ASSISTANT' | 'SYSTEM';
+  content: string;
+  createdAt: string;
 };
 
 export type EntityKey =

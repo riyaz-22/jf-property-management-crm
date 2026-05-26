@@ -6,6 +6,8 @@ import { AppService } from './app.service';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { AuthModule } from './modules/auth/auth.module';
+import { AiChatModule } from './modules/ai-chat/ai-chat.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { LeasesModule } from './modules/leases/leases.module';
@@ -22,6 +24,8 @@ import { PrismaModule } from './prisma/prisma.module';
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
+    AiChatModule,
+    CalendarModule,
     UsersModule,
     ContactsModule,
     DashboardModule,

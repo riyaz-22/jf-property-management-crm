@@ -53,7 +53,17 @@ Required system users:
 
 `NotificationType`: `INFO`, `SUCCESS`, `WARNING`, `ERROR`, `TASK`
 
-`ActivityType`: `SYSTEM`, `PROPERTY`, `TENANT`, `LEASE`, `PAYMENT`, `MAINTENANCE`, `AUTH`
+`ActivityType`: `SYSTEM`, `PROPERTY`, `TENANT`, `LEASE`, `PAYMENT`, `MAINTENANCE`, `AUTH`, `CONTACT`
+
+`ContactRole`: `PURCHASER`, `VENDOR`, `TENANT`, `LANDLORD`, `COMPANY_VENDOR`, `HIGH_URGENCY`
+
+`PendingTone`: `DANGER`, `WARNING`, `SUCCESS`, `NEUTRAL`
+
+`AppointmentStatus`: `PENDING`, `CONFIRMED`, `CANCELLED`, `COMPLETED`
+
+`AppointmentType`: `VALUATION`, `VIEWING`, `MEETING`, `TASK`
+
+`AiChatRole`: `USER`, `ASSISTANT`, `SYSTEM`
 
 ## Tables
 
@@ -72,6 +82,8 @@ Relationships:
 - One user has many refresh tokens, password reset tokens, notifications, activities.
 - One user can manage many properties via `Property.managerId`.
 - One user can be assigned many maintenance tickets via `MaintenanceTicket.assigneeId`.
+- One user can be assigned calendar appointments via `Appointment.agentId`.
+- One user can own AI chat sessions via `AiChatSession.userId`.
 
 Indexes:
 - `role`
@@ -135,6 +147,7 @@ Important columns:
 Relationships:
 - Optional manager `User`.
 - Has many tenants, leases, payments, maintenance tickets, activities.
+- Has many calendar appointments.
 
 Indexes:
 - `status`
@@ -272,6 +285,204 @@ Indexes:
 
 Soft delete: `deletedAt`.
 
+### Contact
+
+Purpose: contact intelligence records, CRM relationship data, and sell-intent entry point.
+
+Important columns:
+- `slug` unique
+- `firstName`, `lastName`, `email`, `mobile`
+- `role`, `secondaryRoles`
+- company/address fields
+- `assignedAgentId`
+- `lastActivityAt`, `lastActivityNote`
+- `pendingAction`, `pendingTone`
+- `avatarUrl`, `deletedAt`
+
+Relationships:
+- Optional assigned agent `User`.
+- Has many sell intents, timeline entries, AI insights, documents, valuation appointments, and calendar appointments.
+
+Indexes:
+- `role`
+- `assignedAgentId`
+- `city`
+- `postcode`
+- `deletedAt`
+
+Soft delete: `deletedAt`.
+
+### SellIntent
+
+Purpose: sales mandate workflow linked to a contact.
+
+Important columns:
+- `contactId`
+- property title/address
+- `askingPrice`
+- instruction/marketing/target exchange fields
+- `currentStage`
+- JSON `stages`, `checklist`, `propertyInfo`, `nextActions`
+- `workflowProgress`
+
+Relationships:
+- Required `Contact`.
+- Has many valuation appointments.
+
+Indexes:
+- `contactId`
+
+Soft delete: none in current schema.
+
+### ValuationAppointment
+
+Purpose: valuation scheduling from the sell-intent/contact workflow.
+
+Important columns:
+- `contactId`
+- optional `sellIntentId`
+- optional `agentId`
+- `scheduledAt`
+- `durationMinutes`
+- `status`
+- notes and competing-agent context
+
+Relationships:
+- Required `Contact`.
+- Optional `SellIntent`.
+- Optional assigned `User`.
+
+Indexes:
+- `contactId`
+- `sellIntentId`
+- `agentId`
+- `scheduledAt`
+
+Soft delete: none; status can be set to `CANCELLED`.
+
+### Appointment
+
+Purpose: full calendar system for appointments, reminders, assigned agents, contact/property references, and status lifecycle.
+
+Important columns:
+- `title`
+- `type`
+- `status`
+- `startsAt`, `endsAt`
+- `durationMinutes`
+- optional `agentId`, `propertyId`, `contactId`
+- `reference`, `location`, `notes`
+- `reminderAt`
+- `deletedAt`
+
+Relationships:
+- Optional assigned agent `User`.
+- Optional `Property`.
+- Optional `Contact`.
+- Has many attendees, notes, and status history rows.
+
+Indexes:
+- `startsAt`
+- `endsAt`
+- `agentId`
+- `propertyId`
+- `contactId`
+- `status`
+- `deletedAt`
+
+Soft delete: `deletedAt`; delete flow also sets status to `CANCELLED`.
+
+### AppointmentAttendee
+
+Purpose: attendees linked to calendar appointments.
+
+Important columns:
+- `appointmentId`
+- optional `userId`
+- optional `contactId`
+- `name`, `email`
+- `response`
+
+Relationships:
+- Required `Appointment`.
+- Optional `User`.
+
+Indexes:
+- `appointmentId`
+- `userId`
+- `contactId`
+
+### AppointmentNote
+
+Purpose: notes attached to appointments.
+
+Important columns:
+- `appointmentId`
+- optional `authorId`
+- `body`
+- `createdAt`
+
+Relationships:
+- Required `Appointment`.
+- Optional author `User`.
+
+Indexes:
+- `appointmentId`
+- `authorId`
+
+### AppointmentStatusHistory
+
+Purpose: audit trail for calendar appointment status changes.
+
+Important columns:
+- `appointmentId`
+- optional `fromStatus`
+- `toStatus`
+- optional `changedById`
+- optional `reason`
+- `createdAt`
+
+Relationships:
+- Required `Appointment`.
+
+Indexes:
+- `appointmentId`
+- `createdAt`
+
+### AiChatSession
+
+Purpose: persisted lightweight assistant sessions.
+
+Important columns:
+- optional `userId`
+- `title`
+- timestamps
+
+Relationships:
+- Optional owner `User`.
+- Has many `AiChatMessage` rows.
+
+Indexes:
+- `userId`
+- `updatedAt`
+
+### AiChatMessage
+
+Purpose: persisted assistant message history.
+
+Important columns:
+- `sessionId`
+- `role`
+- `content`
+- `createdAt`
+
+Relationships:
+- Required `AiChatSession`.
+
+Indexes:
+- `sessionId`
+- `createdAt`
+
 ### Activity
 
 Purpose: dashboard activity feed.
@@ -300,4 +511,4 @@ Soft delete: none in current schema.
 
 - `Unit`: not present. Property inventory is modeled directly as `Property`.
 - `ActivityLog`: not present. Activity feed uses the `Activity` model.
-- AI chat messages/history: not persisted in current schema.
+- External LLM audit/provider tables: not present. The current assistant stores chat history but does not call an external model provider.

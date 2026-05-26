@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { CalendarPage } from '../calendar/CalendarPage';
 import { contacts as demoContacts } from '../../constants/demoData';
 import type {
   ContactInsight,
@@ -504,7 +505,7 @@ const ContactHeader = ({ contact, compact = false }: { contact: ContactRecord; c
   </Card>
 );
 
-const ContactDrawer = ({ contact, onClose, onEdit }: { contact: ContactRecord; onClose: () => void; onEdit: () => void }) => {
+const ContactDrawer = ({ contact, onClose, onEdit, onOpenSell }: { contact: ContactRecord; onClose: () => void; onEdit: () => void; onOpenSell: () => void }) => {
   useViewportOverlayLock(true, onClose);
 
   return (
@@ -566,9 +567,9 @@ const ContactDrawer = ({ contact, onClose, onEdit }: { contact: ContactRecord; o
               <span className="text-right font-black text-slate-950">{value}</span>
             </div>
           ))}
-          <Link to={`/contacts/${contact.slug ?? contact.id}/sell-intent`} className="mt-5 flex h-12 items-center justify-center gap-2 rounded-md bg-emerald-500 text-sm font-black text-white shadow-lg shadow-emerald-200">
+          <button type="button" onClick={onOpenSell} className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-500 text-sm font-black text-white shadow-lg shadow-emerald-200">
             <ExternalLink size={16} /> View Sell Mandate <ArrowRight size={17} />
-          </Link>
+          </button>
         </Card>
       </section>
       <section className="mt-8">
@@ -585,6 +586,7 @@ const ContactDrawer = ({ contact, onClose, onEdit }: { contact: ContactRecord; o
 
 export const ContactDirectoryPage = () => {
   const [selected, setSelected] = useState<ContactRecord | null>(null);
+  const [workspace, setWorkspace] = useState<'directory' | 'sell' | 'calendar'>('directory');
   const [editing, setEditing] = useState<ContactRecord | null>(null);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<ContactRoleCode | ''>('');
@@ -631,7 +633,13 @@ export const ContactDirectoryPage = () => {
       ) : null}
       {error ? <p className="mb-4 rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-700">{error} Showing local demo contacts.</p> : null}
 
-      <Card className="min-w-0 overflow-hidden">
+      {workspace === 'sell' && selected ? (
+        <SellIntentWorkspacePage contactId={selected.slug ?? selected.id} embedded onBack={() => setWorkspace('directory')} />
+      ) : workspace === 'calendar' ? (
+        <CalendarPage embedded onClose={() => setWorkspace('directory')} />
+      ) : null}
+
+      <Card className={cn('min-w-0 overflow-hidden', workspace !== 'directory' && 'hidden')}>
         <div className="hidden grid-cols-[48px_1.5fr_1fr_0.8fr_1fr_60px] bg-slate-100 px-5 py-5 text-xs font-black uppercase tracking-widest text-slate-500 lg:grid">
           <span /><span>Name & address</span><span>Communication</span><span>Last activity</span><span>Pending actions</span><span>Action</span>
         </div>
@@ -685,7 +693,14 @@ export const ContactDirectoryPage = () => {
           </div>
         </footer>
       </Card>
-      {selected ? <ContactDrawer contact={selected} onClose={() => setSelected(null)} onEdit={() => setEditing(selected)} /> : null}
+      {selected && workspace === 'directory' ? (
+        <ContactDrawer
+          contact={selected}
+          onClose={() => setSelected(null)}
+          onEdit={() => setEditing(selected)}
+          onOpenSell={() => setWorkspace('sell')}
+        />
+      ) : null}
       {editing ? (
         <AddContactModal
           contact={editing}
@@ -877,8 +892,9 @@ const SchedulePanel = ({ contact, onClose, onConfirmed }: { contact: ContactReco
   );
 };
 
-export const SellIntentWorkspacePage = () => {
-  const { id = 'marcus-sterling' } = useParams();
+export const SellIntentWorkspacePage = ({ contactId, embedded = false, onBack }: { contactId?: string; embedded?: boolean; onBack?: () => void } = {}) => {
+  const { id: routeId = 'marcus-sterling' } = useParams();
+  const id = contactId ?? routeId;
   const navigate = useNavigate();
   const { contact } = useContactDetail(id);
   const { intent, setIntent, error } = useSellIntent(id);
@@ -895,13 +911,13 @@ export const SellIntentWorkspacePage = () => {
   };
 
   return (
-    <div className="min-w-0 p-5 md:p-8">
-      <div className="mb-6"><button type="button" onClick={() => navigate(`/contacts/${contact.slug ?? contact.id}`)} className="mb-4 inline-flex items-center gap-2 text-sm font-black text-slate-950"><ArrowLeft size={18} /> Marcus contact</button><ContactHeader contact={contact} /></div>
+    <div className={cn('min-w-0', embedded ? 'py-5' : 'p-5 md:p-8')}>
+      <div className="mb-6"><button type="button" onClick={() => onBack ? onBack() : navigate('/contacts')} className="mb-4 inline-flex items-center gap-2 text-sm font-black text-slate-950"><ArrowLeft size={18} /> Back to contact workspace</button><ContactHeader contact={contact} /></div>
       {error ? <p className="mb-4 rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-700">{error} Showing local sell intent workspace.</p> : null}
       <h1 className="mb-4 break-words text-4xl font-black">Sell intent workspace</h1>
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,380px)_minmax(0,1fr)_minmax(320px,420px)]">
         <Card className="self-start p-5"><div className="mb-5 flex items-center justify-between"><h2 className="text-sm font-black uppercase tracking-widest text-slate-500">Mandate stages</h2><button type="button" aria-label="Collapse" className="grid h-9 w-9 place-items-center rounded-md border border-slate-200"><ChevronLeft size={17} /></button></div><p className="mb-4 text-sm text-slate-500">New enquiry & qualified are complete on the contact record.</p><div className="grid gap-2">{(intent?.stages ?? defaultStages).map((stage) => <button key={stage.label} type="button" className={cn('h-11 rounded-md border border-slate-200 bg-slate-100 px-4 text-left text-sm font-black text-slate-700', stage.active && 'border-emerald-400 bg-slate-950 text-white')}>{stage.label}</button>)}</div></Card>
-        <Card className="overflow-hidden"><div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 p-8"><div><Badge tone="amber">Valuation pending</Badge><h2 className="mt-5 text-3xl font-black">Property Valuation</h2><p className="mt-2 max-w-xl text-slate-600">Schedule an on-site valuation to assess the property and set a realistic asking price for {contact.name}.</p></div><Button onClick={() => setScheduleOpen(true)} icon={<CalendarCheck size={18} />}>Schedule Valuation</Button></div><div className="p-8"><div className="mb-6 flex items-center justify-between"><h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Pre-valuation checklist</h3><Badge tone="green">{checklistDone} / {(intent?.checklist ?? defaultChecklist).length} done</Badge></div><div className="grid gap-6">{(intent?.checklist ?? defaultChecklist).map((item) => <label key={item.label} className="flex items-center gap-4 text-base font-semibold"><input type="checkbox" checked={Boolean(item.completed)} onChange={(event) => void toggleChecklist(item.label, event.target.checked)} className="h-5 w-5 rounded border-slate-300" /> <span className={cn(item.completed && 'text-slate-400 line-through')}>{item.label}</span></label>)}</div><button type="button" className="mt-8 flex h-14 w-full items-center justify-between rounded-md border border-indigo-200 bg-indigo-50 px-5 text-sm font-black uppercase tracking-widest text-indigo-700"><span className="inline-flex items-center gap-2"><Home size={17} /> Property info (from sell intent)</span><ChevronDown size={18} /></button></div></Card>
+        <Card className="overflow-hidden"><div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 p-8"><div><Badge tone="amber">Valuation pending</Badge><h2 className="mt-5 text-3xl font-black">Property Valuation</h2><p className="mt-2 max-w-xl text-slate-600">Schedule an on-site valuation to assess the property and set a realistic asking price for {contact.name}.</p></div><Button onClick={() => setScheduleOpen(true)} icon={<CalendarCheck size={18} />}>Schedule Valuation</Button></div><div className="p-8"><div className="mb-6 flex items-center justify-between"><h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Pre-valuation checklist</h3><Badge tone="green">{checklistDone} / {(intent?.checklist ?? defaultChecklist).length} done</Badge></div><div className="grid gap-6">{(intent?.checklist ?? defaultChecklist).map((item) => <label key={item.label} className="flex items-center gap-4 text-base font-semibold"><input type="checkbox" checked={Boolean(item.completed)} onChange={(event) => void toggleChecklist(item.label, event.target.checked)} className="h-5 w-5 rounded border-slate-300" /> <span className={cn(item.completed && 'text-slate-400 line-through')}>{item.label}</span></label>)}</div><button type="button" onClick={() => setScheduleOpen(true)} className="mt-8 flex h-14 w-full items-center justify-between rounded-md border border-indigo-200 bg-indigo-50 px-5 text-sm font-black uppercase tracking-widest text-indigo-700"><span className="inline-flex items-center gap-2"><Home size={17} /> Property info (from sell intent)</span><ChevronDown size={18} /></button></div></Card>
         <InsightsPanel insights={contact.aiInsights} />
       </div>
       {scheduleOpen ? <SchedulePanel contact={contact} onClose={() => setScheduleOpen(false)} onConfirmed={(appointment) => setIntent((current) => current ? { ...current, appointments: [appointment, ...(current.appointments ?? [])] } : current)} /> : null}

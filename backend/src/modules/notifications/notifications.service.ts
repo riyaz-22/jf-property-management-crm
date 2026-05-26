@@ -25,7 +25,7 @@ export class NotificationsService {
     const { page, limit, skip, take } = getPagination(query);
     const canViewAll = this.elevatedRoles.includes(role);
     const where: Prisma.NotificationWhereInput = {
-      ...(canViewAll ? (query.userId ? { userId: query.userId } : {}) : { userId: currentUserId }),
+      userId: canViewAll && query.userId ? query.userId : currentUserId,
       deletedAt: null,
       ...(query.unread === 'true' ? { readAt: null } : {}),
     };
@@ -43,18 +43,27 @@ export class NotificationsService {
     return getPaginatedResponse(data, total, page, limit);
   }
 
-  unreadCount(userId: string) {
-    return this.prisma.notification.count({
+  async unreadCount(userId: string) {
+    const count = await this.prisma.notification.count({
       where: {
         userId,
         deletedAt: null,
         readAt: null,
       },
     });
+
+    return { count };
   }
 
   create(dto: CreateNotificationDto) {
-    return this.prisma.notification.create({ data: dto });
+    const { link, actionUrl, ...data } = dto;
+    return this.prisma.notification.create({
+      data: {
+        ...data,
+        actionUrl: actionUrl ?? link,
+        link: link ?? actionUrl,
+      },
+    });
   }
 
   async update(id: string, dto: UpdateNotificationDto) {
@@ -66,9 +75,19 @@ export class NotificationsService {
       throw new NotFoundException('Notification not found');
     }
 
+    const { link, actionUrl, ...data } = dto;
+
     return this.prisma.notification.update({
       where: { id },
-      data: dto,
+      data: {
+        ...data,
+        ...(actionUrl !== undefined || link !== undefined
+          ? {
+              actionUrl: actionUrl ?? link,
+              link: link ?? actionUrl,
+            }
+          : {}),
+      },
     });
   }
 

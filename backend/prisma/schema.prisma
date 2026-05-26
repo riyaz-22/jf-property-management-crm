@@ -82,6 +82,13 @@ enum NotificationType {
   TASK
 }
 
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 enum ActivityType {
   SYSTEM
   PROPERTY
@@ -116,6 +123,19 @@ enum AppointmentStatus {
   COMPLETED
 }
 
+enum AppointmentType {
+  VALUATION
+  VIEWING
+  MEETING
+  TASK
+}
+
+enum AiChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
 model User {
   id              String               @id @default(uuid())
   email           String               @unique @db.VarChar(255)
@@ -138,6 +158,10 @@ model User {
   activities      Activity[]
   assignedContacts Contact[]            @relation("ContactAgent")
   valuationAppointments ValuationAppointment[] @relation("ValuationAgent")
+  appointments     Appointment[]        @relation("AppointmentAgent")
+  appointmentAttendees AppointmentAttendee[]
+  appointmentNotes AppointmentNote[]
+  aiChatSessions   AiChatSession[]
 
   @@index([role])
   @@index([deletedAt])
@@ -175,6 +199,7 @@ model Contact {
   documents         ContactDocument[]
   chatHistory       ContactAiChatMessage[]
   valuationAppointments ValuationAppointment[]
+  appointments      Appointment[]
 
   @@index([role])
   @@index([assignedAgentId])
@@ -338,6 +363,7 @@ model Property {
   payments           Payment[]
   maintenanceTickets MaintenanceTicket[]
   activities         Activity[]
+  appointments       Appointment[]
 
   @@index([status])
   @@index([city])
@@ -451,21 +477,131 @@ model MaintenanceTicket {
 }
 
 model Notification {
-  id        String           @id @default(uuid())
-  userId    String
-  title     String           @db.VarChar(160)
-  message   String
-  type      NotificationType @default(INFO)
-  link      String?
-  readAt    DateTime?
-  deletedAt DateTime?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String               @id @default(uuid())
+  userId          String
+  title           String               @db.VarChar(160)
+  message         String
+  type            NotificationType     @default(INFO)
+  priority        NotificationPriority @default(MEDIUM)
+  actionUrl       String?
+  link            String?
+  relatedEntity   String?              @db.VarChar(80)
+  relatedEntityId String?              @db.VarChar(120)
+  avatarUrl       String?
+  icon            String?              @db.VarChar(40)
+  readAt          DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([readAt])
+  @@index([createdAt])
   @@index([deletedAt])
+}
+
+model Appointment {
+  id              String                     @id @default(uuid())
+  title           String                     @db.VarChar(180)
+  type            AppointmentType            @default(VALUATION)
+  status          AppointmentStatus          @default(CONFIRMED)
+  startsAt        DateTime
+  endsAt          DateTime
+  durationMinutes Int                        @default(60)
+  agentId         String?
+  propertyId      String?
+  contactId       String?
+  reference       String?                    @db.VarChar(80)
+  location        String?
+  notes           String?
+  reminderAt      DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  agent           User?                      @relation("AppointmentAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  property        Property?                  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  contact         Contact?                   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  attendees       AppointmentAttendee[]
+  appointmentNotes AppointmentNote[]
+  statusHistory   AppointmentStatusHistory[]
+
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([agentId])
+  @@index([propertyId])
+  @@index([contactId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model AppointmentAttendee {
+  id            String      @id @default(uuid())
+  appointmentId String
+  userId        String?
+  contactId     String?
+  name          String      @db.VarChar(160)
+  email         String?     @db.VarChar(255)
+  response      String      @default("PENDING") @db.VarChar(40)
+  createdAt     DateTime    @default(now())
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentId])
+  @@index([userId])
+  @@index([contactId])
+}
+
+model AppointmentNote {
+  id            String      @id @default(uuid())
+  appointmentId String
+  authorId      String?
+  body          String
+  createdAt     DateTime    @default(now())
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  author        User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentId])
+  @@index([authorId])
+}
+
+model AppointmentStatusHistory {
+  id            String            @id @default(uuid())
+  appointmentId String
+  fromStatus    AppointmentStatus?
+  toStatus      AppointmentStatus
+  changedById   String?
+  reason        String?
+  createdAt     DateTime          @default(now())
+  appointment   Appointment       @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([createdAt])
+}
+
+model AiChatSession {
+  id        String          @id @default(uuid())
+  userId    String?
+  title     String          @default("CRM assistant") @db.VarChar(160)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  user      User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages  AiChatMessage[]
+
+  @@index([userId])
+  @@index([updatedAt])
+}
+
+model AiChatMessage {
+  id        String      @id @default(uuid())
+  sessionId String
+  role      AiChatRole
+  content   String
+  createdAt DateTime    @default(now())
+  session   AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
 }
 
 model Activity {

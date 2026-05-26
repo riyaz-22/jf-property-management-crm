@@ -36,10 +36,9 @@ export class NotificationsController {
     return this.notificationsService.create(dto);
   }
 
-  @Patch(':id')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER)
-  update(@Param('id') id: string, @Body() dto: UpdateNotificationDto) {
-    return this.notificationsService.update(id, dto);
+  @Patch('read-all')
+  markAllRead(@CurrentUser('id') userId: string) {
+    return this.notificationsService.markAllRead(userId);
   }
 
   @Patch(':id/read')
@@ -47,9 +46,10 @@ export class NotificationsController {
     return this.notificationsService.markRead(id, userId);
   }
 
-  @Patch('read-all')
-  markAllRead(@CurrentUser('id') userId: string) {
-    return this.notificationsService.markAllRead(userId);
+  @Patch(':id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER)
+  update(@Param('id') id: string, @Body() dto: UpdateNotificationDto) {
+    return this.notificationsService.update(id, dto);
   }
 
   @Delete(':id')

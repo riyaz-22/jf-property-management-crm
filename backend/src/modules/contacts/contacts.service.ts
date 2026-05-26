@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ContactRole, PendingTone, Prisma } from '@prisma/client';
 import { existsSync, unlinkSync } from 'fs';
+import { randomUUID } from 'crypto';
 import { join } from 'path';
 import {
   getPaginatedResponse,
@@ -254,13 +255,31 @@ export class ContactsService {
     try {
       const contact = await this.findOne(contactIdOrSlug);
       const intent = await this.ensureSellIntent(contact.id, contact.firstName, contact.lastName);
+      const scheduledAt = new Date(dto.scheduledAt);
+      const duration = dto.durationMinutes ?? 60;
+      const agentId = dto.agentId || contact.assignedAgentId;
+      if (agentId) {
+        const overlap = await this.prisma.valuationAppointment.findFirst({
+          where: {
+            agentId,
+            status: { not: 'CANCELLED' },
+            scheduledAt: {
+              lt: new Date(scheduledAt.getTime() + duration * 60000),
+              gt: new Date(scheduledAt.getTime() - 240 * 60000),
+            },
+          },
+        });
+        if (overlap) {
+          throw new BadRequestException('This agent already has an appointment near that time slot.');
+        }
+      }
       const appointment = await this.prisma.valuationAppointment.create({
         data: {
           contactId: contact.id,
           sellIntentId: intent.id,
-          agentId: dto.agentId || contact.assignedAgentId,
-          scheduledAt: new Date(dto.scheduledAt),
-          durationMinutes: dto.durationMinutes ?? 60,
+          agentId,
+          scheduledAt,
+          durationMinutes: duration,
           notes: dto.notes,
           competingAgents: dto.competingAgents,
         },
@@ -276,6 +295,12 @@ export class ContactsService {
           agentName: contact.assignedAgent ? `${contact.assignedAgent.firstName} ${contact.assignedAgent.lastName}` : 'Alexander Thorne',
         },
       });
+
+      const end = new Date(appointment.scheduledAt.getTime() + appointment.durationMinutes * 60000);
+      await this.prisma.$executeRawUnsafe(`
+        INSERT INTO "Appointment" ("id","title","type","status","startsAt","endsAt","durationMinutes","agentId","contactId","reference","location","notes","updatedAt")
+        VALUES ($1,$2,'VALUATION'::"AppointmentType",$3::"AppointmentStatus",$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+      `, randomUUID(), `Valuation: ${contact.firstName} ${contact.lastName}`, appointment.status, appointment.scheduledAt, end, appointment.durationMinutes, appointment.agentId, contact.id, intent.propertyTitle, intent.propertyAddress, appointment.notes);
 
       return appointment;
     } catch (error) {

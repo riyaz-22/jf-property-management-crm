@@ -1,5 +1,5 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { NotificationType } from '@prisma/client';
+import { NotificationPriority, NotificationType } from '@prisma/client';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
@@ -28,8 +28,32 @@ export class CreateNotificationDto {
   type?: NotificationType;
 
   @IsOptional()
+  @IsEnum(NotificationPriority)
+  priority?: NotificationPriority;
+
+  @IsOptional()
+  @IsString()
+  actionUrl?: string;
+
+  @IsOptional()
   @IsString()
   link?: string;
+
+  @IsOptional()
+  @IsString()
+  relatedEntity?: string;
+
+  @IsOptional()
+  @IsString()
+  relatedEntityId?: string;
+
+  @IsOptional()
+  @IsString()
+  avatarUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  icon?: string;
 }
 
 export class UpdateNotificationDto extends PartialType(CreateNotificationDto) {}
