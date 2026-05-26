@@ -984,182 +984,166 @@ export const EntityPage = ({ entity }: { entity: EntityKey }) => {
         onClose={() => setModal(null)}
       >
         {modal?.type === 'view' ? (
-          <div>
-            {entity === 'payments' ? (
-              <div className="grid gap-6">
-                {/* ── Hero card ── */}
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100 shadow-sm">
-                  <div className="flex flex-col gap-6 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-black uppercase tracking-[0.25em] text-slate-500">
-                        Payment Reference
-                      </p>
+          entity === 'payments' ? (
+            <div className="grid gap-6">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100 shadow-sm">
+                <div className="flex flex-col gap-6 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-slate-500">
+                      Payment Reference
+                    </p>
 
-                      {/* Use truncate + title so long refs don't overflow */}
-                      <h2
-                        className="mt-2 truncate text-2xl font-black text-slate-950 md:text-3xl"
-                        title={String(modal.record.reference ?? '-')}
-                      >
-                        {String(modal.record.reference ?? '-')}
-                      </h2>
+                    <h2
+                      className="mt-2 truncate text-2xl font-black text-slate-950 md:text-3xl"
+                      title={String(modal.record.reference ?? '-')}
+                    >
+                      {String(modal.record.reference ?? '-')}
+                    </h2>
 
-                      <p className="mt-3 text-sm text-slate-500">
-                        Enterprise payment transaction overview
-                      </p>
-                    </div>
-
-                    <div className="flex shrink-0 items-center">
-                      <Badge tone={statusTone(String(modal.record.status ?? 'PENDING'))}>
-                        {String(modal.record.status ?? 'PENDING')}
-                      </Badge>
-                    </div>
+                    <p className="mt-3 text-sm text-slate-500">
+                      Enterprise payment transaction overview
+                    </p>
                   </div>
 
-                  {/* ── Stats row ── */}
-                  <div className="grid grid-cols-2 gap-4 border-t border-slate-200 bg-white/70 p-4 xl:grid-cols-4">
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                        Amount
-                      </p>
-                      {/* FIX: whitespace-nowrap prevents mid-number line breaks */}
-                      <p className="mt-2 whitespace-nowrap text-2xl font-black text-emerald-700">
-                        {formatCurrency(Number(modal.record.amount ?? 0))}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                        Due Date
-                      </p>
-                      <p className="mt-2 text-base font-bold text-slate-950">
-                        {modal.record.dueDate
-                          ? formatDate(String(modal.record.dueDate))
-                          : '-'}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                        Payment Method
-                      </p>
-                      <p className="mt-2 text-base font-bold text-slate-950">
-                        {modal.record.method
-                          ? String(modal.record.method).replaceAll('_', ' ')
-                          : 'Not Provided'}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                        Paid Date
-                      </p>
-                      <p className="mt-2 text-base font-bold text-slate-950">
-                        {modal.record.paidAt
-                          ? formatDate(String(modal.record.paidAt))
-                          : 'Pending'}
-                      </p>
-                    </div>
+                  <div className="flex shrink-0 items-center">
+                    <Badge tone={statusTone(String(modal.record.status ?? 'PENDING'))}>
+                      {String(modal.record.status ?? 'PENDING')}
+                    </Badge>
                   </div>
                 </div>
 
-                {/* ── Detail cards ── */}
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                  {/* Tenant Information */}
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-black uppercase tracking-[0.15em] text-slate-500">
-                        Tenant Information
-                      </h3>
-                      <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                    </div>
+                <div className="grid grid-cols-2 gap-4 border-t border-slate-200 bg-white/70 p-4 xl:grid-cols-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Amount
+                    </p>
 
-                    <div className="mt-5 grid gap-5">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Tenant Name
-                        </p>
-                        <p className="mt-1 text-base font-bold text-slate-950">
-                          {nestedTitle(modal.record, 'tenant')}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Property
-                        </p>
-                        <p className="mt-1 text-base font-bold text-slate-950">
-                          {nestedTitle(modal.record, 'property')}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Lease Status
-                        </p>
-                        <p className="mt-1 text-base font-bold text-slate-950">
-                          {modal.record.lease ? 'Lease Linked' : 'No Lease Linked'}
-                        </p>
-                      </div>
-                    </div>
+                    <p className="mt-2 whitespace-nowrap text-2xl font-black text-emerald-700">
+                      {formatCurrency(Number(modal.record.amount ?? 0))}
+                    </p>
                   </div>
 
-                  {/* Transaction Details */}
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-black uppercase tracking-[0.15em] text-slate-500">
-                        Transaction Details
-                      </h3>
-                      <div className="h-2 w-2 rounded-full bg-blue-500" />
-                    </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Due Date
+                    </p>
 
-                    <div className="mt-5 grid gap-5">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Payment Status
-                        </p>
-                        <div className="mt-2">
-                          <Badge tone={statusTone(String(modal.record.status ?? 'PENDING'))}>
-                            {String(modal.record.status ?? 'PENDING')}
-                          </Badge>
-                        </div>
-                      </div>
+                    <p className="mt-2 text-base font-bold text-slate-950">
+                      {modal.record.dueDate
+                        ? formatDate(String(modal.record.dueDate))
+                        : '-'}
+                    </p>
+                  </div>
 
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Created At
-                        </p>
-                        <p className="mt-1 text-base font-bold text-slate-950">
-                          {modal.record.createdAt
-                            ? formatDate(String(modal.record.createdAt))
-                            : '-'}
-                        </p>
-                      </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Payment Method
+                    </p>
 
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Updated At
-                        </p>
-                        <p className="mt-1 text-base font-bold text-slate-950">
-                          {modal.record.updatedAt
-                            ? formatDate(String(modal.record.updatedAt))
-                            : '-'}
-                        </p>
-                      </div>
+                    <p className="mt-2 text-base font-bold text-slate-950">
+                      {modal.record.method
+                        ? String(modal.record.method).replaceAll('_', ' ')
+                        : 'Not Provided'}
+                    </p>
+                  </div>
 
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Payment ID
-                        </p>
-                        <p className="mt-1 break-all text-sm font-medium text-slate-700">
-                          {String(modal.record.id ?? '-')}
-                        </p>
-                      </div>
-                    </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Paid Date
+                    </p>
+
+                    <p className="mt-2 text-base font-bold text-slate-950">
+                      {modal.record.paidAt
+                        ? formatDate(String(modal.record.paidAt))
+                        : 'Pending'}
+                    </p>
                   </div>
                 </div>
               </div>
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {Object.entries(modal.record).map(([key, value]) => {
+                const isObject =
+                  typeof value === 'object' &&
+                  value !== null &&
+                  !Array.isArray(value);
+
+                const isArray = Array.isArray(value);
+
+                return (
+                  <div
+                    key={key}
+                    className="rounded-xl border border-slate-200 bg-white p-4"
+                  >
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      {key}
+                    </p>
+
+                    {!isObject && !isArray && (
+                      <p className="mt-2 break-words text-sm font-semibold text-slate-900">
+                        {String(value ?? '-')}
+                      </p>
+                    )}
+
+                    {isObject && (
+                      <div className="mt-3 grid gap-3">
+                        {Object.entries(value as Record<string, unknown>).map(
+                          ([nestedKey, nestedValue]) => (
+                            <div
+                              key={nestedKey}
+                              className="rounded-lg bg-slate-50 p-3"
+                            >
+                              <p className="text-[11px] font-bold uppercase text-slate-400">
+                                {nestedKey}
+                              </p>
+
+                              <p className="mt-1 break-words text-sm font-semibold text-slate-900">
+                                {String(nestedValue ?? '-')}
+                              </p>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    )}
+
+                    {isArray && (
+                      <div className="mt-3 grid gap-3">
+                        {(value as unknown[]).map((item, index) => (
+                          <div
+                            key={index}
+                            className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                          >
+                            {typeof item === 'object' && item !== null ? (
+                              <div className="grid gap-2">
+                                {Object.entries(item as Record<string, unknown>).map(
+                                  ([arrayKey, arrayValue]) => (
+                                    <div key={arrayKey}>
+                                      <p className="text-[11px] font-bold uppercase text-slate-400">
+                                        {arrayKey}
+                                      </p>
+
+                                      <p className="mt-1 break-words text-sm font-semibold text-slate-900">
+                                        {String(arrayValue ?? '-')}
+                                      </p>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm font-semibold text-slate-900">
+                                {String(item)}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
         ) : null}
       </Modal>
 
