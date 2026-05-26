@@ -90,6 +90,30 @@ enum ActivityType {
   PAYMENT
   MAINTENANCE
   AUTH
+  CONTACT
+}
+
+enum ContactRole {
+  PURCHASER
+  VENDOR
+  TENANT
+  LANDLORD
+  COMPANY_VENDOR
+  HIGH_URGENCY
+}
+
+enum PendingTone {
+  DANGER
+  WARNING
+  SUCCESS
+  NEUTRAL
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
 }
 
 model User {
@@ -112,9 +136,147 @@ model User {
   assignedTickets MaintenanceTicket[]  @relation("TicketAssignee")
   notifications   Notification[]
   activities      Activity[]
+  assignedContacts Contact[]            @relation("ContactAgent")
+  valuationAppointments ValuationAppointment[] @relation("ValuationAgent")
 
   @@index([role])
   @@index([deletedAt])
+}
+
+model Contact {
+  id                String               @id @default(uuid())
+  slug              String               @unique @db.VarChar(160)
+  firstName         String               @db.VarChar(100)
+  lastName          String               @db.VarChar(100)
+  email             String               @unique @db.VarChar(255)
+  mobile            String?              @db.VarChar(40)
+  role              ContactRole          @default(PURCHASER)
+  secondaryRoles    ContactRole[]        @default([])
+  company           String?              @db.VarChar(180)
+  address           String?
+  city              String?              @db.VarChar(120)
+  postcode          String?              @db.VarChar(20)
+  country           String               @default("United Kingdom")
+  notes             String?
+  tags              String[]             @default([])
+  avatarUrl         String?
+  assignedAgentId   String?
+  lastActivityAt    DateTime?
+  lastActivityNote  String?
+  pendingAction     String               @default("None Pending")
+  pendingTone       PendingTone          @default(NEUTRAL)
+  deletedAt         DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  assignedAgent     User?                @relation("ContactAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  sellIntents       SellIntent[]
+  timeline          ContactTimelineEntry[]
+  aiInsights        ContactAiInsight[]
+  documents         ContactDocument[]
+  chatHistory       ContactAiChatMessage[]
+  valuationAppointments ValuationAppointment[]
+
+  @@index([role])
+  @@index([assignedAgentId])
+  @@index([city])
+  @@index([postcode])
+  @@index([deletedAt])
+}
+
+model SellIntent {
+  id                String               @id @default(uuid())
+  contactId         String
+  propertyTitle     String               @default("The Glass House") @db.VarChar(180)
+  propertyAddress   String               @default("14 Cheltenham Place, Wilmslow, SK9 4AA")
+  askingPrice       Decimal?             @db.Decimal(14, 2)
+  instruction       String               @default("Sole Agency - Signed") @db.VarChar(120)
+  marketingStatus   String               @default("Valuation pending") @db.VarChar(120)
+  targetExchange    String               @default("Q1 (12-week window)") @db.VarChar(120)
+  currentStage      String               @default("Property Valuation") @db.VarChar(120)
+  stages            Json
+  checklist         Json
+  propertyInfo      Json?
+  nextActions       Json?
+  workflowProgress  Int                  @default(0)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  contact           Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  appointments      ValuationAppointment[]
+
+  @@index([contactId])
+}
+
+model ValuationAppointment {
+  id               String            @id @default(uuid())
+  contactId        String
+  sellIntentId     String?
+  agentId          String?
+  scheduledAt      DateTime
+  durationMinutes  Int               @default(60)
+  status           AppointmentStatus @default(CONFIRMED)
+  notes            String?
+  competingAgents  String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  contact          Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  sellIntent       SellIntent?       @relation(fields: [sellIntentId], references: [id], onDelete: SetNull)
+  agent            User?             @relation("ValuationAgent", fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([contactId])
+  @@index([sellIntentId])
+  @@index([agentId])
+  @@index([scheduledAt])
+}
+
+model ContactTimelineEntry {
+  id          String   @id @default(uuid())
+  contactId   String
+  step        String   @db.VarChar(120)
+  activity    String   @db.VarChar(180)
+  description String
+  agentName   String?  @db.VarChar(160)
+  occurredAt  DateTime @default(now())
+  metadata    Json?
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@index([occurredAt])
+}
+
+model ContactAiInsight {
+  id        String   @id @default(uuid())
+  contactId String
+  title     String   @db.VarChar(180)
+  body      String
+  icon      String   @default("zap") @db.VarChar(40)
+  tone      String   @default("green") @db.VarChar(40)
+  createdAt DateTime @default(now())
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+}
+
+model ContactAiChatMessage {
+  id        String   @id @default(uuid())
+  contactId String
+  role      String   @db.VarChar(40)
+  content   String
+  createdAt DateTime @default(now())
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+}
+
+model ContactDocument {
+  id        String   @id @default(uuid())
+  contactId String
+  name      String   @db.VarChar(180)
+  url       String
+  type      String?  @db.VarChar(80)
+  createdAt DateTime @default(now())
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
 }
 
 model RefreshToken {

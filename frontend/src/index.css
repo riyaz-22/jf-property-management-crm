@@ -18,6 +18,8 @@
 
 html {
   min-width: 320px;
+  min-height: 100%;
+  overflow-x: hidden;
   background: #f8fafc;
 }
 
@@ -25,6 +27,12 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  isolation: isolate;
 }
 
 button,
@@ -32,6 +40,14 @@ input,
 textarea,
 select {
   font: inherit;
+  min-width: 0;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 button {

@@ -26,6 +26,7 @@ import { cn } from '../utils/cn';
 import { Button } from '../components/ui/Primitives';
 import { resolveAssetUrl } from '../services/api';
 import { userService } from '../services/users';
+import { AddContactModal } from '../modules/contacts/ContactPages';
 
 const navigation = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -52,6 +53,9 @@ export const AppShell = () => {
   const navigate = useNavigate();
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [avatarError, setAvatarError] = useState('');
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [addContactOpen, setAddContactOpen] = useState(false);
+  const [quickActionMessage, setQuickActionMessage] = useState('');
   const { user, refreshToken, logout, updateUser } = useAuthStore();
   const activeNavPath = getActiveNavPath(location.pathname);
 
@@ -88,9 +92,18 @@ export const AppShell = () => {
 
   const initials = user ? `${user.firstName[0]}${user.lastName[0]}` : 'JF';
   const avatarUrl = resolveAssetUrl(user?.avatarUrl);
+  const quickActions = [
+    { label: 'Add Contact', action: () => setAddContactOpen(true) },
+    { label: 'Add Property', action: () => navigate('/properties') },
+    { label: 'Add Tenant', action: () => navigate('/tenants') },
+    { label: 'Add Vendor', action: () => { setAddContactOpen(true); } },
+    { label: 'Create Sell Intent', action: () => navigate('/contacts/marcus-sterling/sell-intent') },
+    { label: 'Schedule Valuation', action: () => navigate('/contacts/marcus-sterling/sell-intent') },
+    { label: 'Upload Document', action: () => navigate('/contacts/marcus-sterling') },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+    <div className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col items-center bg-slate-950 py-6 text-slate-400 shadow-xl md:flex">
         <button
           type="button"
@@ -133,9 +146,9 @@ export const AppShell = () => {
         </div>
       </aside>
 
-      <div className="md:pl-20">
+      <div className="min-w-0 md:pl-20">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="flex h-20 items-center gap-4 px-5 md:px-8">
+          <div className="flex h-20 min-w-0 items-center gap-3 px-4 sm:gap-4 sm:px-5 md:px-8">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <div className="relative hidden w-full max-w-xl sm:block">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -145,7 +158,7 @@ export const AppShell = () => {
                 />
               </div>
             </div>
-            <button type="button" className="hidden items-center gap-4 rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold md:flex">
+            <button type="button" className="hidden shrink-0 items-center gap-4 rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold md:flex">
               <span className="text-xs uppercase text-slate-500">Branch</span>
               All Branches
               <ChevronDown size={16} />
@@ -160,10 +173,29 @@ export const AppShell = () => {
             <button type="button" className="hidden text-sm font-semibold text-slate-500 lg:block">
               Help Center
             </button>
-            <Button icon={<Plus size={18} />}>
-              Quick Action
-              <ChevronDown size={15} />
-            </Button>
+            <div className="relative shrink-0">
+              <Button icon={<Plus size={18} />} onClick={() => setQuickOpen((open) => !open)}>
+                <span className="hidden sm:inline">Quick Action</span>
+                <ChevronDown size={15} />
+              </Button>
+              {quickOpen ? (
+                <div className="absolute right-0 top-14 z-50 w-56 overflow-hidden rounded-lg border border-slate-200 bg-white py-2 text-sm font-bold shadow-xl">
+                  {quickActions.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      className="block w-full px-4 py-3 text-left text-slate-700 hover:bg-slate-50"
+                      onClick={() => {
+                        setQuickOpen(false);
+                        item.action();
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="relative hidden sm:block">
               <input
                 ref={avatarInputRef}
@@ -196,7 +228,7 @@ export const AppShell = () => {
           </div>
         </header>
 
-        <main className="min-h-[calc(100vh-80px)]">
+        <main className="min-h-[calc(100vh-80px)] min-w-0 pb-20 md:pb-0">
           <Outlet />
         </main>
       </div>
@@ -211,6 +243,21 @@ export const AppShell = () => {
           3
         </span>
       </button>
+      {quickActionMessage ? (
+        <div className="fixed right-6 top-24 z-50 max-w-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 shadow-lg">
+          {quickActionMessage}
+        </div>
+      ) : null}
+      {addContactOpen ? (
+        <AddContactModal
+          onClose={() => setAddContactOpen(false)}
+          onSaved={(contact) => navigate(`/contacts/${contact.slug ?? contact.id}`)}
+          onSuccess={(message) => {
+            setQuickActionMessage(message);
+            window.setTimeout(() => setQuickActionMessage(''), 4000);
+          }}
+        />
+      ) : null}
 
       <div className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white md:hidden">
         {navigation.slice(0, 5).map(({ label, path, icon: Icon }) => (

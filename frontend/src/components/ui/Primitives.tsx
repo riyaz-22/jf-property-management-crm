@@ -1,6 +1,50 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../utils/cn';
+
+let lockCount = 0;
+let previousBodyOverflow = '';
+let previousBodyPaddingRight = '';
+
+export const useViewportOverlayLock = (active: boolean, onEscape?: () => void) => {
+  useEffect(() => {
+    if (!active) {
+      return undefined;
+    }
+
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    if (lockCount === 0) {
+      previousBodyOverflow = document.body.style.overflow;
+      previousBodyPaddingRight = document.body.style.paddingRight;
+      document.body.style.overflow = 'hidden';
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`;
+      }
+    }
+
+    lockCount += 1;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onEscape?.();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      lockCount = Math.max(lockCount - 1, 0);
+
+      if (lockCount === 0) {
+        document.body.style.overflow = previousBodyOverflow;
+        document.body.style.paddingRight = previousBodyPaddingRight;
+      }
+    };
+  }, [active, onEscape]);
+};
 
 export const Button = ({
   children,
@@ -43,11 +87,12 @@ export const Button = ({
 export const Card = ({
   children,
   className,
+  ...props
 }: {
   children: ReactNode;
   className?: string;
-}) => (
-  <section className={cn('rounded-lg border border-slate-200 bg-white shadow-sm', className)}>
+} & HTMLAttributes<HTMLElement>) => (
+  <section {...props} className={cn('rounded-lg border border-slate-200 bg-white shadow-sm', className)}>
     {children}
   </section>
 );
@@ -104,25 +149,40 @@ export const Modal = ({
   open: boolean;
   onClose: () => void;
 }) => {
+  useViewportOverlayLock(open, onClose);
+
   if (!open) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 px-4 backdrop-blur-sm">
-      <Card className="w-full max-w-xl overflow-hidden">
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-bold text-slate-950">{title}</h2>
+    <div
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-50 grid min-h-dvh place-items-center overflow-y-auto overflow-x-hidden bg-slate-950/40 px-4 py-4 backdrop-blur-sm sm:py-6"
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-modal-title"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden sm:max-h-[calc(100dvh-3rem)]"
+      >
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <h2 id="app-modal-title" className="min-w-0 text-lg font-bold text-slate-950">{title}</h2>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-slate-100"
           >
             <X size={18} />
           </button>
         </header>
-        <div className="p-5">{children}</div>
+        <div className="min-h-0 overflow-y-auto overflow-x-hidden p-5">{children}</div>
       </Card>
     </div>
   );
@@ -143,7 +203,7 @@ export const DataTable = <T,>({
   columns: Column<T>[];
   emptyLabel?: string;
 }) => (
-  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+  <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
     <div className="overflow-x-auto">
       <table className="min-w-full text-left">
         <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-500">

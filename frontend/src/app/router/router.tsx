@@ -41,9 +41,9 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'contacts', element: <ContactDirectoryPage /> },
-      { path: 'contacts/marcus-sterling', element: <ContactDetailPage /> },
+      { path: 'contacts/:id', element: <ContactDetailPage /> },
       {
-        path: 'contacts/marcus-sterling/sell-intent',
+        path: 'contacts/:id/sell-intent',
         element: <SellIntentWorkspacePage />,
       },
       { path: 'properties', element: entity('properties') },

@@ -146,19 +146,99 @@ export type ContactRole =
   | 'Company / Vendor'
   | 'High Urgency';
 
+export type ContactRoleCode =
+  | 'PURCHASER'
+  | 'VENDOR'
+  | 'TENANT'
+  | 'LANDLORD'
+  | 'COMPANY_VENDOR'
+  | 'HIGH_URGENCY';
+
 export type ContactRecord = {
   id: string;
+  slug?: string;
   initials: string;
   name: string;
   role: ContactRole;
+  roleCode?: ContactRoleCode;
   secondaryRoles: ContactRole[];
+  secondaryRoleCodes?: ContactRoleCode[];
   address: string;
+  city?: string;
+  postcode?: string;
+  country?: string;
   email: string;
   phone: string;
+  mobile?: string;
+  company?: string;
+  notes?: string;
+  tags?: string[];
+  avatarUrl?: string;
+  assignedAgent?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'role' | 'avatarUrl'>;
   lastActivity: string;
   lastActivityNote: string;
   pendingAction: string;
   pendingTone: 'danger' | 'warning' | 'success' | 'neutral';
+  sellIntents?: SellIntentRecord[];
+  aiInsights?: ContactInsight[];
+  timeline?: ContactTimelineEntry[];
+  documents?: ContactDocument[];
+  valuationAppointments?: ValuationAppointment[];
+};
+
+export type SellIntentRecord = {
+  id: string;
+  contactId: string;
+  propertyTitle: string;
+  propertyAddress: string;
+  askingPrice?: string | number;
+  instruction: string;
+  marketingStatus: string;
+  targetExchange: string;
+  currentStage: string;
+  stages: Array<{ label: string; completed?: boolean; active?: boolean }>;
+  checklist: Array<{ label: string; completed?: boolean }>;
+  propertyInfo?: Record<string, unknown>;
+  nextActions?: Array<{ label: string; completed?: boolean }>;
+  workflowProgress: number;
+  appointments?: ValuationAppointment[];
+};
+
+export type ContactInsight = {
+  id: string;
+  title: string;
+  body: string;
+  icon: string;
+  tone: string;
+};
+
+export type ContactTimelineEntry = {
+  id: string;
+  step: string;
+  activity: string;
+  description: string;
+  agentName?: string;
+  occurredAt: string;
+};
+
+export type ContactDocument = {
+  id: string;
+  name: string;
+  url: string;
+  type?: string;
+  createdAt: string;
+};
+
+export type ValuationAppointment = {
+  id: string;
+  contactId: string;
+  sellIntentId?: string;
+  agentId?: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  status: string;
+  notes?: string;
+  competingAgents?: string;
 };
 
 export type EntityKey =

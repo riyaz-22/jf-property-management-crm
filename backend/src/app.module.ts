@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { AuthModule } from './modules/auth/auth.module';
+import { ContactsModule } from './modules/contacts/contacts.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { LeasesModule } from './modules/leases/leases.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
@@ -22,6 +23,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     AuthModule,
     UsersModule,
+    ContactsModule,
     DashboardModule,
     PropertiesModule,
     TenantsModule,
