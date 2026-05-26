@@ -22,8 +22,19 @@ async function bootstrap() {
   app.use('/uploads', express.static(uploadsRoot));
   const frontendUrl = getRequiredEnv('FRONTEND_URL', ['CORS_ORIGIN']);
   app.enableCors({
-    origin: frontendUrl.split(','),
+    origin: frontendUrl.split(',').map((url) => url.trim()),
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Accept',
+      'Authorization',
+      'Origin',
+      'X-Requested-With',
+    ],
+    exposedHeaders: ['Set-Cookie'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
   app.use(cookieParser());
   app.useGlobalPipes(
