@@ -9,7 +9,13 @@
      "routes": [
           {
                "src": "/(.*)",
-               "dest": "dist/main.js"
+               "dest": "dist/main.js",
+               "headers": {
+                    "Access-Control-Allow-Origin": "https://jf-property-management-crm-2foa.vercel.app",
+                    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type,Authorization",
+                    "Access-Control-Allow-Credentials": "true"
+               }
           }
      ]
 }
