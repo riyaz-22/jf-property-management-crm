@@ -37,10 +37,10 @@ export const LoginPage = () => {
     formState: { errors },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: 'admin@jfcrm.local',
-      password: 'Password123!',
-    },
+    // defaultValues: {
+    //   email: 'admin@jfcrm.local',
+    //   password: 'Password123!',
+    // },
   });
 
   const login = useMutation({
@@ -71,6 +71,7 @@ export const LoginPage = () => {
           <TextInput
             label="Email"
             type="email"
+            placeholder="Enter your email address"
             autoComplete="email"
             error={errors.email?.message}
             {...register('email')}
@@ -78,6 +79,7 @@ export const LoginPage = () => {
           <TextInput
             label="Password"
             type="password"
+            placeholder="Enter your password"
             autoComplete="current-password"
             error={errors.password?.message}
             {...register('password')}
